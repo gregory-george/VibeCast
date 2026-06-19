@@ -3,6 +3,7 @@ using VibeCast.Data;
 using VibeCast.Downloads;
 using VibeCast.Episodes;
 using VibeCast.Feeds;
+using VibeCast.Playback;
 
 namespace VibeCast.AppHost;
 
@@ -101,6 +102,7 @@ internal static class HostRunner
         builder.Services.AddScoped<FeedSubscriptionService>();
         builder.Services.AddScoped<FeedRefreshService>();
         builder.Services.AddScoped<EpisodeStateService>();
+        builder.Services.AddScoped<PlaybackService>();
         builder.Services.AddSingleton<ShowNotesSanitizer>();
 
         builder.Services.AddSingleton<DownloadProgressTracker>();

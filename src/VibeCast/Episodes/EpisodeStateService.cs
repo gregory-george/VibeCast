@@ -64,4 +64,22 @@ internal sealed class EpisodeStateService(IDbContextFactory<AppDbContext> dbCont
 
         await db.SaveChangesAsync(ct);
     }
+
+    /// <summary>
+    /// Persists resume position. Meaningless once the file is gone (Phase 5 deletes
+    /// the RSS file on mark-as-played), but harmless to call -- the row simply stops
+    /// being read back by anything once IsPlayed flips.
+    /// </summary>
+    public async Task SavePlaybackPositionAsync(int episodeId, int positionSeconds, CancellationToken ct)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(ct);
+        var episode = await db.Episodes.FindAsync([episodeId], ct);
+        if (episode is null)
+        {
+            return;
+        }
+
+        episode.PlaybackPositionSeconds = positionSeconds;
+        await db.SaveChangesAsync(ct);
+    }
 }

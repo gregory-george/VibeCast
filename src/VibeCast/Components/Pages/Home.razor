@@ -5,6 +5,7 @@
 @inject ShowNotesSanitizer ShowNotesSanitizer
 @inject DownloadQueue DownloadQueue
 @inject DownloadProgressTracker ProgressTracker
+@inject PlaybackService PlaybackService
 @using Microsoft.EntityFrameworkCore
 @using VibeCast.Data
 @using VibeCast.Downloads
@@ -102,6 +103,13 @@
                     {
                         <button @onclick="() => DownloadNow(detail)">Download</button>
                     }
+                    <button @onclick="() => PlayRssAsync(detail.Id)">Play</button>
+                </p>
+            }
+            else
+            {
+                <p>
+                    <button @onclick="() => PlayYouTubeAsync(detail.Id)">Watch</button>
                 </p>
             }
 
@@ -215,6 +223,10 @@
 
     private void DownloadNow(EpisodeDetail current) =>
         DownloadQueue.Enqueue(current.Id, current.Title, current.FeedTitle);
+
+    private Task PlayRssAsync(int episodeId) => PlaybackService.RequestPlayRssAsync(episodeId, cts.Token);
+
+    private Task PlayYouTubeAsync(int episodeId) => PlaybackService.PlayYouTubeAsync(episodeId, cts.Token);
 
     private async Task TogglePlayedAsync(EpisodeDetail current)
     {

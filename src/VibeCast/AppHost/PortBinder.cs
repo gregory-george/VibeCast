@@ -1,5 +1,6 @@
 using System.Net;
 using VibeCast.Components;
+using VibeCast.Playback;
 
 namespace VibeCast.AppHost;
 
@@ -57,6 +58,7 @@ internal static class PortBinder
         app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
         app.UseAntiforgery();
         app.MapStaticAssets();
+        app.MapMediaEndpoints();
         app.MapRazorComponents<App>()
             .AddInteractiveServerRenderMode();
     }

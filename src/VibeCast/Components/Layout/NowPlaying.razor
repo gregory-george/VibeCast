@@ -1,0 +1,247 @@
+@implements IAsyncDisposable
+@inject PlaybackService PlaybackService
+@inject IJSRuntime JS
+@using System.Diagnostics
+@using VibeCast.Playback
+
+@if (PlaybackService.Current is { } current)
+{
+    <div class="now-playing">
+        <div class="now-playing-info">
+            <div class="now-playing-title">@current.Title</div>
+            <div class="now-playing-feed">@current.FeedTitle</div>
+        </div>
+
+        <div class="now-playing-media">
+            @if (current.IsRss)
+            {
+                <audio @ref="audioElement" controls></audio>
+                <label class="speed-control">
+                    Speed
+                    <select @bind="rssRate" @bind:after="OnRssRateChangedAsync">
+                        @foreach (var rate in RssRates)
+                        {
+                            <option value="@rate">@rate.ToString("0.0")x</option>
+                        }
+                    </select>
+                </label>
+            }
+            else
+            {
+                <div id="@youtubeElementId" class="now-playing-youtube"></div>
+                @if (youtubeRates.Count > 0)
+                {
+                    <label class="speed-control">
+                        Speed
+                        <select @bind="youtubeRate" @bind:after="OnYouTubeRateChangedAsync">
+                            @foreach (var rate in youtubeRates)
+                            {
+                                <option value="@rate">@rate.ToString("0.0##")x</option>
+                            }
+                        </select>
+                    </label>
+                }
+            }
+        </div>
+
+        <div class="now-playing-actions">
+            <button @onclick="OpenExternal">Open in external app</button>
+            <button @onclick="StopPlaybackAsync">Close</button>
+        </div>
+    </div>
+}
+else if (PlaybackService.IsAwaitingDownload)
+{
+    <div class="now-playing now-playing-loading">Downloading episode&hellip; will play automatically when ready.</div>
+}
+
+@code {
+    private static readonly decimal[] RssRates = Enumerable.Range(10, 21).Select(i => i / 10m).ToArray();
+
+    private readonly string youtubeElementId = $"yt-player-{Guid.NewGuid():N}";
+    private ElementReference audioElement;
+    private IJSObjectReference? audioModule;
+    private IJSObjectReference? youtubeModule;
+    private DotNetObjectReference<NowPlaying>? dotNetRef;
+    private PeriodicTimer? saveTimer;
+    private Task? saveLoopTask;
+    private readonly CancellationTokenSource lifetimeCts = new();
+
+    private int? loadedEpisodeId;
+    private bool loadedIsRss;
+    private decimal rssRate = 1.0m;
+    private List<double> youtubeRates = [];
+    private double youtubeRate = 1.0;
+
+    protected override void OnInitialized() => PlaybackService.Changed += OnPlaybackChanged;
+
+    private void OnPlaybackChanged() => InvokeAsync(StateHasChanged);
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            dotNetRef = DotNetObjectReference.Create(this);
+            saveTimer = new PeriodicTimer(TimeSpan.FromSeconds(5));
+            saveLoopTask = SavePositionLoopAsync(lifetimeCts.Token);
+        }
+
+        var current = PlaybackService.Current;
+        if (current is null || (loadedEpisodeId == current.EpisodeId && loadedIsRss == current.IsRss))
+        {
+            return;
+        }
+
+        if (current.IsRss)
+        {
+            audioModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/audioPlayer.js");
+            await audioModule.InvokeVoidAsync("init", audioElement, dotNetRef);
+            await audioModule.InvokeVoidAsync("setSource", audioElement, current.MediaUrl, current.InitialPositionSeconds);
+            rssRate = 1.0m;
+            await audioModule.InvokeVoidAsync("setRate", audioElement, (double)rssRate);
+        }
+        else
+        {
+            youtubeModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/youtubePlayer.js");
+            await youtubeModule.InvokeVoidAsync("init", youtubeElementId, current.YouTubeVideoId, current.InitialPositionSeconds, dotNetRef);
+            youtubeRates = (await youtubeModule.InvokeAsync<double[]>("getAvailablePlaybackRates")).ToList();
+            youtubeRate = 1.0;
+            StateHasChanged();
+        }
+
+        loadedEpisodeId = current.EpisodeId;
+        loadedIsRss = current.IsRss;
+    }
+
+    private async Task OnRssRateChangedAsync()
+    {
+        if (audioModule is not null)
+        {
+            await audioModule.InvokeVoidAsync("setRate", audioElement, (double)rssRate);
+        }
+    }
+
+    private async Task OnYouTubeRateChangedAsync()
+    {
+        if (youtubeModule is not null)
+        {
+            await youtubeModule.InvokeVoidAsync("setPlaybackRate", youtubeRate);
+        }
+    }
+
+    [JSInvokable]
+    public Task OnEnded() => Task.CompletedTask;
+
+    [JSInvokable]
+    public Task OnPlayStateChanged(bool isPlaying) => Task.CompletedTask;
+
+    [JSInvokable]
+    public Task OnYouTubeStateChange(int state) => Task.CompletedTask;
+
+    private async Task SavePositionLoopAsync(CancellationToken ct)
+    {
+        try
+        {
+            while (saveTimer is not null && await saveTimer.WaitForNextTickAsync(ct))
+            {
+                await SaveCurrentPositionAsync(ct);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    private async Task SaveCurrentPositionAsync(CancellationToken ct)
+    {
+        var current = PlaybackService.Current;
+        if (current is null)
+        {
+            return;
+        }
+
+        try
+        {
+            double seconds = current.IsRss
+                ? audioModule is null ? 0 : await audioModule.InvokeAsync<double>("getCurrentTime", audioElement)
+                : youtubeModule is null ? 0 : await youtubeModule.InvokeAsync<double>("getCurrentTime");
+
+            if (seconds > 0)
+            {
+                await PlaybackService.SavePositionAsync(current.EpisodeId, (int)seconds, ct);
+            }
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+        catch (ObjectDisposedException)
+        {
+        }
+    }
+
+    private void OpenExternal()
+    {
+        if (PlaybackService.Current is { } current)
+        {
+            Process.Start(new ProcessStartInfo(current.ExternalTarget) { UseShellExecute = true });
+        }
+    }
+
+    private async Task StopPlaybackAsync()
+    {
+        try
+        {
+            if (loadedIsRss && audioModule is not null)
+            {
+                await audioModule.InvokeVoidAsync("pause", audioElement);
+            }
+            else if (!loadedIsRss && youtubeModule is not null)
+            {
+                await youtubeModule.InvokeVoidAsync("pause");
+            }
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+
+        loadedEpisodeId = null;
+        PlaybackService.Stop();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        PlaybackService.Changed -= OnPlaybackChanged;
+        lifetimeCts.Cancel();
+        saveTimer?.Dispose();
+
+        if (saveLoopTask is not null)
+        {
+            try
+            {
+                await saveLoopTask;
+            }
+            catch
+            {
+            }
+        }
+
+        lifetimeCts.Dispose();
+        dotNetRef?.Dispose();
+
+        try
+        {
+            if (audioModule is not null)
+            {
+                await audioModule.DisposeAsync();
+            }
+
+            if (youtubeModule is not null)
+            {
+                await youtubeModule.DisposeAsync();
+            }
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+}
