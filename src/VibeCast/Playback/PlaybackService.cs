@@ -85,7 +85,8 @@ internal sealed class PlaybackService : IDisposable
             MediaUrl: null,
             YouTubeVideoId: episode.YouTubeVideoId,
             ExternalTarget: $"https://www.youtube.com/watch?v={episode.YouTubeVideoId}",
-            InitialPositionSeconds: episode.PlaybackPositionSeconds));
+            InitialPositionSeconds: episode.PlaybackPositionSeconds,
+            IsVideo: true));
     }
 
     public Task SavePositionAsync(int episodeId, int positionSeconds, CancellationToken ct) =>
@@ -134,7 +135,8 @@ internal sealed class PlaybackService : IDisposable
             MediaUrl: $"/media/episodes/{episode.Id}",
             YouTubeVideoId: null,
             ExternalTarget: filePath,
-            InitialPositionSeconds: episode.PlaybackPositionSeconds);
+            InitialPositionSeconds: episode.PlaybackPositionSeconds,
+            IsVideo: episode.EnclosureMediaType is { } mediaType && mediaType.StartsWith("video/", StringComparison.OrdinalIgnoreCase));
     }
 
     private void OnDownloadProgressChanged()

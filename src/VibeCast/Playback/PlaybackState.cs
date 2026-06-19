@@ -5,7 +5,8 @@ namespace VibeCast.Playback;
 /// <see cref="MediaUrl"/> (the loopback media endpoint); YouTube items carry
 /// <see cref="YouTubeVideoId"/> for the IFrame embed. <see cref="ExternalTarget"/> is
 /// what "Open in external app" hands to ShellExecute -- the local file path for RSS,
-/// the plain watch?v= URL for YouTube.
+/// the plain watch?v= URL for YouTube. <see cref="IsVideo"/> drives whether the
+/// expand-to-theater toggle is shown (no point enlarging audio-only RSS).
 /// </summary>
 internal sealed record PlaybackState(
     int EpisodeId,
@@ -15,4 +16,5 @@ internal sealed record PlaybackState(
     string? MediaUrl,
     string? YouTubeVideoId,
     string ExternalTarget,
-    int InitialPositionSeconds);
+    int InitialPositionSeconds,
+    bool IsVideo);

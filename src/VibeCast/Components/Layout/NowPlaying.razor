@@ -7,7 +7,7 @@
 
 @if (PlaybackService.Current is { } current)
 {
-    <div class="now-playing">
+    <div class="now-playing @(isExpanded ? "now-playing-expanded" : "")">
         <div class="now-playing-info">
             <div class="now-playing-title">@current.Title</div>
             <div class="now-playing-feed">@current.FeedTitle</div>
@@ -16,7 +16,16 @@
         <div class="now-playing-media">
             @if (current.IsRss)
             {
-                <audio @ref="audioElement" controls></audio>
+                @if (current.IsVideo)
+                {
+                    <div class="now-playing-video-wrap">
+                        <video @ref="audioElement" controls></video>
+                    </div>
+                }
+                else
+                {
+                    <audio @ref="audioElement" controls></audio>
+                }
                 <label class="speed-control">
                     Speed
                     <select @bind="rssRate" @bind:after="OnRssRateChangedAsync">
@@ -29,7 +38,9 @@
             }
             else
             {
-                <div id="@youtubeElementId" class="now-playing-youtube"></div>
+                <div class="now-playing-video-wrap">
+                    <div id="@youtubeElementId"></div>
+                </div>
                 @if (youtubeRates.Count > 0)
                 {
                     <label class="speed-control">
@@ -46,6 +57,10 @@
         </div>
 
         <div class="now-playing-actions">
+            @if (current.IsVideo)
+            {
+                <button @onclick="ToggleExpanded" title="@(isExpanded ? "Collapse" : "Expand")">@(isExpanded ? "⤡" : "⤢")</button>
+            }
             <button @onclick="OpenExternal">Open in external app</button>
             <button @onclick="StopPlaybackAsync">Close</button>
         </div>
@@ -63,6 +78,7 @@ else if (PlaybackService.IsAwaitingDownload)
     private ElementReference audioElement;
     private IJSObjectReference? audioModule;
     private IJSObjectReference? youtubeModule;
+    private IJSObjectReference? uiModule;
     private DotNetObjectReference<NowPlaying>? dotNetRef;
     private PeriodicTimer? saveTimer;
     private Task? saveLoopTask;
@@ -73,6 +89,7 @@ else if (PlaybackService.IsAwaitingDownload)
     private decimal rssRate = 1.0m;
     private List<double> youtubeRates = [];
     private double youtubeRate = 1.0;
+    private bool isExpanded;
 
     protected override void OnInitialized() => PlaybackService.Changed += OnPlaybackChanged;
 
@@ -81,9 +98,36 @@ else if (PlaybackService.IsAwaitingDownload)
         if (PlaybackService.Current is null)
         {
             loadedEpisodeId = null;
+            isExpanded = false;
         }
 
         InvokeAsync(StateHasChanged);
+    }
+
+    private async Task ToggleExpanded()
+    {
+        isExpanded = !isExpanded;
+        if (uiModule is not null && dotNetRef is not null)
+        {
+            if (isExpanded)
+            {
+                await uiModule.InvokeVoidAsync("addEscapeListener", dotNetRef);
+            }
+            else
+            {
+                await uiModule.InvokeVoidAsync("removeEscapeListener");
+            }
+        }
+    }
+
+    [JSInvokable]
+    public async Task OnEscapePressed()
+    {
+        if (isExpanded)
+        {
+            await ToggleExpanded();
+            StateHasChanged();
+        }
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -93,6 +137,7 @@ else if (PlaybackService.IsAwaitingDownload)
             dotNetRef = DotNetObjectReference.Create(this);
             saveTimer = new PeriodicTimer(TimeSpan.FromSeconds(5));
             saveLoopTask = SavePositionLoopAsync(lifetimeCts.Token);
+            uiModule = await JS.InvokeAsync<IJSObjectReference>("import", "./js/nowPlayingUi.js");
         }
 
         var current = PlaybackService.Current;
@@ -216,12 +261,18 @@ else if (PlaybackService.IsAwaitingDownload)
             {
                 await youtubeModule.InvokeVoidAsync("pause");
             }
+
+            if (isExpanded && uiModule is not null)
+            {
+                await uiModule.InvokeVoidAsync("removeEscapeListener");
+            }
         }
         catch (JSDisconnectedException)
         {
         }
 
         loadedEpisodeId = null;
+        isExpanded = false;
         PlaybackService.Stop();
     }
 
@@ -255,6 +306,12 @@ else if (PlaybackService.IsAwaitingDownload)
             if (youtubeModule is not null)
             {
                 await youtubeModule.DisposeAsync();
+            }
+
+            if (uiModule is not null)
+            {
+                await uiModule.InvokeVoidAsync("removeEscapeListener");
+                await uiModule.DisposeAsync();
             }
         }
         catch (JSDisconnectedException)

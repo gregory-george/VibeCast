@@ -33,8 +33,8 @@ export async function init(elementId, videoId, startSeconds, dotNetRef) {
         try {
             player = new YT.Player(elementId, {
                 videoId: videoId,
-                height: '200',
-                width: '356',
+                height: '100%',
+                width: '100%',
                 playerVars: { autoplay: 1, start: Math.floor(startSeconds || 0) },
                 events: {
                     onReady: () => resolve(),
