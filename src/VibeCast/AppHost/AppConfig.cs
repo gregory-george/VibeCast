@@ -22,11 +22,26 @@ internal sealed class AppConfig
     /// <summary>Global auto-download age cutoff in days, used as the default for newly-added feeds.</summary>
     public int DefaultAutoDownloadMaxAgeDays { get; set; } = 90;
 
+    /// <summary>
+    /// On initial RSS subscribe, only the newest N episodes are left active for
+    /// auto-download; the rest of the back catalog is pre-archived (see
+    /// <see cref="VibeCast.Feeds.FeedSubscriptionService"/>) so a feed with years of
+    /// history doesn't flood downloads/disk on day one. Not applied to YouTube: its
+    /// feed already returns only ~15 most recent items.
+    /// </summary>
+    public int InitialActiveEpisodeCount { get; set; } = 15;
+
     /// <summary>Default "exclude Shorts" setting applied when a new YouTube feed is added.</summary>
     public bool DefaultExcludeShorts { get; set; }
 
     /// <summary>Starting playback speed for newly-opened episodes (RSS: exact; YouTube: nearest available step).</summary>
     public decimal DefaultPlaybackSpeed { get; set; } = 1.0m;
+
+    /// <summary>
+    /// Whether closed captions start on for newly-opened YouTube videos. RSS has no
+    /// caption tracks to toggle, so this only affects the YouTube embed. Default on.
+    /// </summary>
+    public bool ClosedCaptionsEnabled { get; set; } = true;
 
     /// <summary>How many enclosures the download worker streams at once.</summary>
     public int ConcurrentDownloadLimit { get; set; } = 1;

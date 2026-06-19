@@ -22,7 +22,7 @@ function ensureApiLoaded() {
     });
 }
 
-export async function init(elementId, videoId, startSeconds, dotNetRef) {
+export async function init(elementId, videoId, startSeconds, dotNetRef, captionsEnabled) {
     await ensureApiLoaded();
     if (player) {
         player.destroy();
@@ -35,7 +35,7 @@ export async function init(elementId, videoId, startSeconds, dotNetRef) {
                 videoId: videoId,
                 height: '100%',
                 width: '100%',
-                playerVars: { autoplay: 1, start: Math.floor(startSeconds || 0) },
+                playerVars: { autoplay: 1, start: Math.floor(startSeconds || 0), cc_load_policy: captionsEnabled ? 1 : 0 },
                 events: {
                     onReady: () => resolve(),
                     onError: (e) => console.error('[vibecast-yt] player error', e.data),
@@ -46,6 +46,17 @@ export async function init(elementId, videoId, startSeconds, dotNetRef) {
             reject(e);
         }
     });
+}
+
+export function setCaptionsEnabled(enabled) {
+    if (!player) {
+        return;
+    }
+    if (enabled) {
+        player.loadModule('captions');
+    } else {
+        player.unloadModule('captions');
+    }
 }
 
 export function pause() {

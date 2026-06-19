@@ -95,6 +95,15 @@ internal sealed class FeedSubscriptionService(
             feed.Episodes.Add(EpisodeMapper.ToEntity(parsedEpisode));
         }
 
+        if (type == FeedType.Rss)
+        {
+            foreach (var episode in feed.Episodes.OrderByDescending(e => e.PublishedAtUtc).Skip(config.InitialActiveEpisodeCount))
+            {
+                episode.IsPlayed = true;
+                episode.IsArchived = true;
+            }
+        }
+
         db.Feeds.Add(feed);
         await db.SaveChangesAsync(ct);
 

@@ -65,6 +65,13 @@
             Exclude Shorts by default for new YouTube subscriptions
         </label>
     </p>
+    <p>
+        <label>
+            Episodes left active when subscribing to a new RSS feed
+            <input type="number" min="0" style="width: 6rem;" value="@Config.InitialActiveEpisodeCount" @onchange="UpdateInitialActiveEpisodeCountAsync" />
+        </label>
+        &mdash; the rest of the back catalog is pre-archived so a long-running feed doesn't flood downloads on day one. Doesn't apply to YouTube (its feed already returns only ~15 recent items).
+    </p>
 </section>
 
 <section>
@@ -86,6 +93,13 @@
             <input type="number" min="1.0" max="3.0" step="0.1" style="width: 5rem;" value="@Config.DefaultPlaybackSpeed" @onchange="UpdatePlaybackSpeedAsync" />
         </label>
         &mdash; RSS uses this exactly; YouTube's embed snaps to its own nearest native step.
+    </p>
+    <p>
+        <label>
+            <input type="checkbox" checked="@Config.ClosedCaptionsEnabled" @onchange="e => SaveBoolAsync(v => Config.ClosedCaptionsEnabled = v, e)" />
+            Closed captions on by default
+        </label>
+        &mdash; YouTube only; RSS episodes have no caption tracks.
     </p>
     <p>
         <label>
@@ -157,6 +171,15 @@
         if (int.TryParse(e.Value as string, out var days) && days >= 0)
         {
             Config.DefaultAutoDownloadMaxAgeDays = days;
+            Config.Save();
+        }
+    }
+
+    private void UpdateInitialActiveEpisodeCountAsync(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value as string, out var count) && count >= 0)
+        {
+            Config.InitialActiveEpisodeCount = count;
             Config.Save();
         }
     }

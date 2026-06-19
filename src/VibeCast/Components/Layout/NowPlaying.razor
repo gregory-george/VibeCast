@@ -53,6 +53,10 @@
                         </select>
                     </label>
                 }
+                <label class="speed-control">
+                    <input type="checkbox" checked="@ccEnabled" @onchange="OnCcChangedAsync" />
+                    CC
+                </label>
             }
         </div>
 
@@ -89,6 +93,7 @@ else if (PlaybackService.IsAwaitingDownload)
     private decimal rssRate = 1.0m;
     private List<double> youtubeRates = [];
     private double youtubeRate = 1.0;
+    private bool ccEnabled = true;
     private bool isExpanded;
 
     protected override void OnInitialized() => PlaybackService.Changed += OnPlaybackChanged;
@@ -157,7 +162,8 @@ else if (PlaybackService.IsAwaitingDownload)
         else
         {
             youtubeModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/youtubePlayer.js");
-            await youtubeModule.InvokeVoidAsync("init", youtubeElementId, current.YouTubeVideoId, current.InitialPositionSeconds, dotNetRef);
+            ccEnabled = Config.ClosedCaptionsEnabled;
+            await youtubeModule.InvokeVoidAsync("init", youtubeElementId, current.YouTubeVideoId, current.InitialPositionSeconds, dotNetRef, ccEnabled);
             youtubeRates = (await youtubeModule.InvokeAsync<double[]>("getAvailablePlaybackRates")).ToList();
             // YouTube's embed only honors its own native stepped menu, so pick the
             // closest available rate to the configured default rather than faking it.
@@ -185,6 +191,15 @@ else if (PlaybackService.IsAwaitingDownload)
         if (youtubeModule is not null)
         {
             await youtubeModule.InvokeVoidAsync("setPlaybackRate", youtubeRate);
+        }
+    }
+
+    private async Task OnCcChangedAsync(ChangeEventArgs e)
+    {
+        ccEnabled = e.Value is true;
+        if (youtubeModule is not null)
+        {
+            await youtubeModule.InvokeVoidAsync("setCaptionsEnabled", ccEnabled);
         }
     }
 

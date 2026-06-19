@@ -7,13 +7,20 @@ namespace VibeCast.Downloads;
 /// enclosures only (YouTube never downloads), per-feed auto-download toggle, and
 /// the per-feed max-age cutoff (null = no limit). Evaluated once at ingest time --
 /// an episode that ages past the cutoff while still undownloaded simply never
-/// auto-downloads; it is not retroactively purged.
+/// auto-downloads; it is not retroactively purged. Also skips episodes already
+/// marked played/archived (e.g. the back-catalog FeedSubscriptionService archives
+/// on initial subscribe), so they aren't immediately re-queued.
 /// </summary>
 internal static class AutoDownloadGate
 {
     public static bool ShouldAutoDownload(Feed feed, Episode episode)
     {
         if (episode.EnclosureUrl is null)
+        {
+            return false;
+        }
+
+        if (episode.IsPlayed || episode.IsArchived)
         {
             return false;
         }

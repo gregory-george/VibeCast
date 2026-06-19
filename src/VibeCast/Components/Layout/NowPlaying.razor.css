@@ -60,7 +60,7 @@
 
 .now-playing-video-wrap {
     width: 200px;
-    height: 50px;
+    height: 150px;
     flex-shrink: 0;
     line-height: 0;
 }
