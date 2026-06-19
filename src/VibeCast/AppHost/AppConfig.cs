@@ -63,6 +63,15 @@ internal sealed class AppConfig
     /// </summary>
     public bool HasOfferedDesktopShortcut { get; set; }
 
+    /// <summary>
+    /// Sticky height (px) of the small (non-theater) now-playing video player, set by
+    /// dragging the resize handle (see <see cref="VibeCast.Components.Layout.NowPlaying"/>).
+    /// Width follows from the player's aspect ratio. Video only -- audio has no
+    /// resizable player, and theater mode is unaffected. Default matches the
+    /// stylesheet's original fixed small-player height.
+    /// </summary>
+    public int VideoPlayerHeightPx { get; set; } = 150;
+
     public static AppConfig Load()
     {
         if (!File.Exists(AppPaths.ConfigFile))

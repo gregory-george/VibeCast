@@ -18,8 +18,14 @@
             {
                 @if (current.IsVideo)
                 {
-                    <div class="now-playing-video-wrap">
-                        <video @ref="audioElement" controls></video>
+                    <div class="video-resize-group">
+                        @if (!isExpanded)
+                        {
+                            <div class="video-resize-handle" @ref="resizeHandleElement" title="Drag up to expand, down to collapse"></div>
+                        }
+                        <div class="now-playing-video-wrap" @ref="videoWrapElement">
+                            <video @ref="audioElement" controls></video>
+                        </div>
                     </div>
                 }
                 else
@@ -38,8 +44,14 @@
             }
             else
             {
-                <div class="now-playing-video-wrap">
-                    <div id="@youtubeElementId"></div>
+                <div class="video-resize-group">
+                    @if (!isExpanded)
+                    {
+                        <div class="video-resize-handle" @ref="resizeHandleElement" title="Drag up to expand, down to collapse"></div>
+                    }
+                    <div class="now-playing-video-wrap" @ref="videoWrapElement">
+                        <div id="@youtubeElementId"></div>
+                    </div>
                 </div>
                 @if (youtubeRates.Count > 0)
                 {
@@ -95,6 +107,9 @@ else if (PlaybackService.IsAwaitingDownload)
     private double youtubeRate = 1.0;
     private bool ccEnabled = true;
     private bool isExpanded;
+    private ElementReference videoWrapElement;
+    private ElementReference resizeHandleElement;
+    private bool videoResizeActive;
 
     protected override void OnInitialized() => PlaybackService.Changed += OnPlaybackChanged;
 
@@ -146,6 +161,8 @@ else if (PlaybackService.IsAwaitingDownload)
         }
 
         var current = PlaybackService.Current;
+        await SyncVideoResizeAsync(current);
+
         if (current is null || (loadedEpisodeId == current.EpisodeId && loadedIsRss == current.IsRss))
         {
             return;
@@ -176,6 +193,44 @@ else if (PlaybackService.IsAwaitingDownload)
 
         loadedEpisodeId = current.EpisodeId;
         loadedIsRss = current.IsRss;
+    }
+
+    private async Task SyncVideoResizeAsync(PlaybackState? current)
+    {
+        bool isVideoVisible = current is { IsVideo: true };
+
+        // Resizing only applies to the small (non-theater) player; theater mode keeps
+        // its own fixed full-width layout untouched.
+        bool shouldBeActive = uiModule is not null && isVideoVisible && !isExpanded;
+
+        if (shouldBeActive == videoResizeActive)
+        {
+            return;
+        }
+
+        if (shouldBeActive)
+        {
+            await uiModule!.InvokeVoidAsync("initVideoResize", videoWrapElement, resizeHandleElement, dotNetRef, Config.VideoPlayerHeightPx);
+        }
+        else if (isVideoVisible)
+        {
+            await uiModule!.InvokeVoidAsync("endVideoResize", videoWrapElement);
+        }
+
+        videoResizeActive = shouldBeActive;
+    }
+
+    [JSInvokable]
+    public Task OnVideoHeightChanged(int heightPx)
+    {
+        var clamped = Math.Clamp(heightPx, 80, 500);
+        if (Config.VideoPlayerHeightPx != clamped)
+        {
+            Config.VideoPlayerHeightPx = clamped;
+            Config.Save();
+        }
+
+        return Task.CompletedTask;
     }
 
     private async Task OnRssRateChangedAsync()
