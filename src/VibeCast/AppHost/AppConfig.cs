@@ -6,6 +6,14 @@ internal sealed class AppConfig
 {
     public int? PreferredPort { get; set; }
 
+    /// <summary>
+    /// When the in-app player reaches the end of an episode, automatically mark it
+    /// played (RSS: deletes the file too) instead of requiring a manual click.
+    /// Default off. Global setting -- full settings UI lands in a later phase; this
+    /// is a working toggle in the meantime (see Feeds page).
+    /// </summary>
+    public bool AutoMarkOnCompletion { get; set; }
+
     public static AppConfig Load()
     {
         if (!File.Exists(AppPaths.ConfigFile))

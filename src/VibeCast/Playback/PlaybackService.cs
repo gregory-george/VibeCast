@@ -19,18 +19,21 @@ internal sealed class PlaybackService : IDisposable
     private readonly DownloadQueue downloadQueue;
     private readonly DownloadProgressTracker progressTracker;
     private readonly EpisodeStateService episodeStateService;
+    private readonly AppConfig config;
     private int? pendingPlayEpisodeId;
 
     public PlaybackService(
         IDbContextFactory<AppDbContext> dbContextFactory,
         DownloadQueue downloadQueue,
         DownloadProgressTracker progressTracker,
-        EpisodeStateService episodeStateService)
+        EpisodeStateService episodeStateService,
+        AppConfig config)
     {
         this.dbContextFactory = dbContextFactory;
         this.downloadQueue = downloadQueue;
         this.progressTracker = progressTracker;
         this.episodeStateService = episodeStateService;
+        this.config = config;
         progressTracker.Changed += OnDownloadProgressChanged;
     }
 
@@ -87,6 +90,24 @@ internal sealed class PlaybackService : IDisposable
 
     public Task SavePositionAsync(int episodeId, int positionSeconds, CancellationToken ct) =>
         episodeStateService.SavePlaybackPositionAsync(episodeId, positionSeconds, ct);
+
+    /// <summary>
+    /// Called when the in-app player reaches the end of the current episode. Only
+    /// acts if the user opted into auto-mark-on-completion (default off) -- on
+    /// *open* would delete the RSS file out from under the player, but completion
+    /// is safe since playback is done. Clears the bar afterward since an RSS file
+    /// marked played no longer exists to keep playing.
+    /// </summary>
+    public async Task HandlePlaybackEndedAsync(CancellationToken ct)
+    {
+        if (!config.AutoMarkOnCompletion || Current is not { } current)
+        {
+            return;
+        }
+
+        await episodeStateService.MarkAsPlayedAsync(current.EpisodeId, ct);
+        Stop();
+    }
 
     public void Stop()
     {

@@ -4,6 +4,7 @@ using VibeCast.Downloads;
 using VibeCast.Episodes;
 using VibeCast.Feeds;
 using VibeCast.Playback;
+using VibeCast.Retention;
 
 namespace VibeCast.AppHost;
 
@@ -45,7 +46,7 @@ internal static class HostRunner
 
         DatabaseLifecycle.BackupBeforeMigration();
 
-        var (app, port) = await PortBinder.BuildAndBindAsync(args, preferredPort, ConfigureServices);
+        var (app, port) = await PortBinder.BuildAndBindAsync(args, preferredPort, builder => ConfigureServices(builder, config));
 
         await DatabaseLifecycle.MigrateAsync(app.Services);
 
@@ -66,8 +67,23 @@ internal static class HostRunner
 
         await app.WaitForShutdownAsync();
 
+        await RunShutdownRetentionCleanupAsync(app.Services);
         await DatabaseLifecycle.CheckpointAsync(app.Services);
         RunLock.Delete();
+    }
+
+    private static async Task RunShutdownRetentionCleanupAsync(IServiceProvider services)
+    {
+        try
+        {
+            await using var scope = services.CreateAsyncScope();
+            var retentionService = scope.ServiceProvider.GetRequiredService<RetentionService>();
+            await retentionService.EnforceAllFeedsAsync(CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Shutdown retention cleanup failed: {ex}");
+        }
     }
 
     private static async Task RunStartupRefreshAsync(IServiceProvider services, CancellationToken ct)
@@ -87,10 +103,14 @@ internal static class HostRunner
         }
     }
 
-    private static void ConfigureServices(WebApplicationBuilder builder)
+    private static void ConfigureServices(WebApplicationBuilder builder, AppConfig config)
     {
         builder.Services.AddRazorComponents()
             .AddInteractiveServerComponents();
+
+        // Same mutable instance RunAsync persists run.lock/port through, so a
+        // settings toggle saved from the UI doesn't clobber the live-bound port.
+        builder.Services.AddSingleton(config);
 
         builder.Services.AddPooledDbContextFactory<AppDbContext>(options =>
             options.UseSqlite($"Data Source={AppPaths.DatabaseFile};Default Timeout=30"));
@@ -103,6 +123,7 @@ internal static class HostRunner
         builder.Services.AddScoped<FeedRefreshService>();
         builder.Services.AddScoped<EpisodeStateService>();
         builder.Services.AddScoped<PlaybackService>();
+        builder.Services.AddScoped<RetentionService>();
         builder.Services.AddSingleton<ShowNotesSanitizer>();
 
         builder.Services.AddSingleton<DownloadProgressTracker>();

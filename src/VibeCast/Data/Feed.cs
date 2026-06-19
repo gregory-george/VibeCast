@@ -34,6 +34,14 @@ internal sealed class Feed
     /// </summary>
     public int? AutoDownloadMaxAgeDays { get; set; } = 90;
 
+    /// <summary>
+    /// Per-feed override of the keep-last-N backstop (caps downloaded files on disk,
+    /// not DB rows -- additive model keeps every record forever). Null means "use the
+    /// global default" (<see cref="VibeCast.Retention.RetentionService.DefaultKeepLastCount"/>).
+    /// 0 disables the backstop for this feed. RSS only -- YouTube never downloads files.
+    /// </summary>
+    public int? KeepLastCount { get; set; }
+
     public DateTime DateAddedUtc { get; set; }
 
     public DateTime? LastRefreshedUtc { get; set; }

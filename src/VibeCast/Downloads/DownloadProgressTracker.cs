@@ -23,4 +23,17 @@ internal sealed class DownloadProgressTracker
         snapshots.TryGetValue(episodeId, out var snapshot) ? snapshot : null;
 
     public IReadOnlyCollection<DownloadProgressSnapshot> GetAll() => snapshots.Values.ToList();
+
+    /// <summary>
+    /// Drops a stale "Completed" snapshot once the file it described is gone
+    /// (mark-as-played deletion, keep-last-N eviction) so download-status UI falls
+    /// back to reading the DB's IsDownloaded column instead of trusting old progress.
+    /// </summary>
+    public void Clear(int episodeId)
+    {
+        if (snapshots.TryRemove(episodeId, out _))
+        {
+            Changed?.Invoke();
+        }
+    }
 }

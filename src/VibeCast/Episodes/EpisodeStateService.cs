@@ -8,17 +8,21 @@ namespace VibeCast.Episodes;
 /// <summary>
 /// Mark-as-played and Archive/Unarchive state transitions. Played and archived move
 /// together in v1 (tracked as distinct flags for future flexibility, per CLAUDE.md).
-/// RSS file deletion on mark-as-played is wired in Phase 5 alongside the rest of
-/// the retention policy (keep-last-N, cleanup-on-refresh/shutdown) -- this phase
-/// only flips the state flags there. Unarchive's re-download (this phase's explicit
-/// scope) is wired below.
 /// </summary>
-internal sealed class EpisodeStateService(IDbContextFactory<AppDbContext> dbContextFactory, DownloadQueue downloadQueue)
+internal sealed class EpisodeStateService(
+    IDbContextFactory<AppDbContext> dbContextFactory,
+    DownloadQueue downloadQueue,
+    DownloadProgressTracker progressTracker)
 {
+    /// <summary>
+    /// For RSS, deletes the downloaded file immediately (CLAUDE.md: mark-as-played is
+    /// the trigger, not a later cleanup pass). YouTube has nothing on disk, so it's a
+    /// pure flag move. Both move the record to Archive.
+    /// </summary>
     public async Task MarkAsPlayedAsync(int episodeId, CancellationToken ct)
     {
         await using var db = await dbContextFactory.CreateDbContextAsync(ct);
-        var episode = await db.Episodes.FindAsync([episodeId], ct);
+        var episode = await db.Episodes.Include(e => e.Feed).FirstOrDefaultAsync(e => e.Id == episodeId, ct);
         if (episode is null)
         {
             return;
@@ -26,6 +30,20 @@ internal sealed class EpisodeStateService(IDbContextFactory<AppDbContext> dbCont
 
         episode.IsPlayed = true;
         episode.IsArchived = true;
+
+        if (episode.EnclosureUrl is not null && episode.DownloadedFileName is not null)
+        {
+            var filePath = Path.Combine(AppPaths.DownloadsDirectory, episode.Feed.Slug, episode.DownloadedFileName);
+            if (File.Exists(filePath))
+            {
+                File.Delete(filePath);
+            }
+
+            episode.IsDownloaded = false;
+            episode.DownloadedFileName = null;
+            progressTracker.Clear(episodeId);
+        }
+
         await db.SaveChangesAsync(ct);
     }
 

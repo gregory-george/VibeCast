@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using VibeCast.Data;
 using VibeCast.Downloads;
+using VibeCast.Retention;
 
 namespace VibeCast.Feeds;
 
@@ -15,6 +16,7 @@ internal sealed class FeedRefreshService(
     IDbContextFactory<AppDbContext> dbContextFactory,
     FeedFetcher feedFetcher,
     DownloadQueue downloadQueue,
+    RetentionService retentionService,
     ILogger<FeedRefreshService> logger)
 {
     public async Task RefreshAllAsync(CancellationToken ct)
@@ -94,6 +96,10 @@ internal sealed class FeedRefreshService(
                 downloadQueue.Enqueue(episode.Id, episode.Title, feedTitle);
             }
         }
+
+        // keep-last-N cleanup runs on refresh (CLAUDE.md) -- catches files that aged
+        // past the cap even if nothing new downloaded this time.
+        await retentionService.EnforceFeedAsync(feed.Id, ct);
 
         return FeedRefreshResult.Ok(newEpisodes.Count);
     }
