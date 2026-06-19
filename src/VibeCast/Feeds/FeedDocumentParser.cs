@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.RegularExpressions;
 using System.Xml;
 using System.Xml.Linq;
 
@@ -138,12 +139,47 @@ internal static class FeedDocumentParser
             raw.YouTubeVideoId);
     }
 
+    // RFC 822/2822 named timezone abbreviations as used in <pubDate> (e.g. "PDT", "GMT").
+    // DateTimeOffset.TryParse only understands numeric offsets and "Z"/"UTC", so these
+    // silently fail to parse and would otherwise fall through to the "unknown -> today"
+    // case, dating every episode as today regardless of its real pubDate.
+    private static readonly Dictionary<string, string> RfcZoneOffsets = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["UT"] = "+00:00",
+        ["GMT"] = "+00:00",
+        ["EST"] = "-05:00",
+        ["EDT"] = "-04:00",
+        ["CST"] = "-06:00",
+        ["CDT"] = "-05:00",
+        ["MST"] = "-07:00",
+        ["MDT"] = "-06:00",
+        ["PST"] = "-08:00",
+        ["PDT"] = "-07:00",
+    };
+
+    private static readonly Regex TrailingRfcZone = new(
+        @"\s([A-Za-z]{2,3})$", RegexOptions.Compiled);
+
     private static DateTimeOffset ParseDate(string? raw)
     {
-        if (!string.IsNullOrWhiteSpace(raw) &&
-            DateTimeOffset.TryParse(raw, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var parsed))
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return DateTimeOffset.UtcNow;
+        }
+
+        if (DateTimeOffset.TryParse(raw, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var parsed))
         {
             return parsed;
+        }
+
+        var zoneMatch = TrailingRfcZone.Match(raw.Trim());
+        if (zoneMatch.Success && RfcZoneOffsets.TryGetValue(zoneMatch.Groups[1].Value, out var offset))
+        {
+            var withOffset = string.Concat(raw.Trim().AsSpan(0, zoneMatch.Index), " ", offset);
+            if (DateTimeOffset.TryParse(withOffset, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var parsedWithOffset))
+            {
+                return parsedWithOffset;
+            }
         }
 
         // Unknown/unparsable date: assume today. Consistent with the 90-day
