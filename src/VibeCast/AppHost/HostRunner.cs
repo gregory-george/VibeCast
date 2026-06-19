@@ -5,6 +5,7 @@ using VibeCast.Episodes;
 using VibeCast.Feeds;
 using VibeCast.Playback;
 using VibeCast.Retention;
+using VibeCast.Shutdown;
 
 namespace VibeCast.AppHost;
 
@@ -57,6 +58,8 @@ internal static class HostRunner
         config.Save();
 
         trayContext.HostLifetime = app.Lifetime;
+        trayContext.DownloadTracker = app.Services.GetRequiredService<DownloadProgressTracker>();
+        trayContext.CancellationRegistry = app.Services.GetRequiredService<DownloadCancellationRegistry>();
         trayContext.ShowTrayIcon(port);
 
         SingleInstance.OpenInBrowser(port);
@@ -107,6 +110,10 @@ internal static class HostRunner
     {
         builder.Services.AddRazorComponents()
             .AddInteractiveServerComponents();
+
+        builder.Services.AddSingleton<CircuitTracker>();
+        builder.Services.AddScoped<Microsoft.AspNetCore.Components.Server.Circuits.CircuitHandler, TrackingCircuitHandler>();
+        builder.Services.AddHostedService<ShutdownCoordinatorService>();
 
         // Same mutable instance RunAsync persists run.lock/port through, so a
         // settings toggle saved from the UI doesn't clobber the live-bound port.

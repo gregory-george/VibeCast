@@ -24,6 +24,10 @@ internal sealed class DownloadProgressTracker
 
     public IReadOnlyCollection<DownloadProgressSnapshot> GetAll() => snapshots.Values.ToList();
 
+    /// <summary>Used by finish-then-exit shutdown gating and the tray's mid-download Quit confirm.</summary>
+    public bool HasActiveDownloads =>
+        snapshots.Values.Any(s => s.Status is DownloadStatus.Queued or DownloadStatus.Downloading);
+
     /// <summary>
     /// Drops a stale "Completed" snapshot once the file it described is gone
     /// (mark-as-played deletion, keep-last-N eviction) so download-status UI falls
