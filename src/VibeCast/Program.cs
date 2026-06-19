@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using VibeCast.AppHost;
 
 namespace VibeCast;
@@ -14,6 +15,13 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
+        // Hide the console window a double-clicked .exe briefly flashes -- a tray
+        // app shouldn't show one. Done via P/Invoke (not OutputType=WinExe): setting
+        // WinExe at the project level breaks the SDK's static web asset / Razor
+        // component JS pipeline (blazor.web.js 404s, no interactivity at all),
+        // discovered live-testing the Phase 8 single-file publish.
+        FreeConsole();
+
         using var mutex = SingleInstance.TryAcquire();
         if (mutex is null)
         {
@@ -49,4 +57,8 @@ internal static class Program
 
         Application.Run(trayContext);
     }
+
+    [DllImport("kernel32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool FreeConsole();
 }

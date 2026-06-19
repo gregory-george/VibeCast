@@ -57,6 +57,26 @@ internal sealed class TrayApplicationContext : ApplicationContext
         }
     }
 
+    /// <summary>
+    /// First-run discoverability (CLAUDE.md §2): must run on this STA thread
+    /// (MessageBox.Show needs a live message loop), so HostRunner posts here via
+    /// the WinForms SynchronizationContext rather than calling it directly.
+    /// </summary>
+    public void OfferDesktopShortcut()
+    {
+        var result = MessageBox.Show(
+            "Create a desktop shortcut to VibeCast? Portable apps don't get a Start menu entry, so this is the easiest way back in (you can pin it to the taskbar from there too).",
+            "VibeCast",
+            MessageBoxButtons.YesNo,
+            MessageBoxIcon.Question,
+            MessageBoxDefaultButton.Button1);
+
+        if (result == DialogResult.Yes)
+        {
+            DesktopShortcut.TryCreate();
+        }
+    }
+
     private void Quit()
     {
         if (DownloadTracker is { HasActiveDownloads: true })

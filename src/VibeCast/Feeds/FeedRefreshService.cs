@@ -48,12 +48,12 @@ internal sealed class FeedRefreshService(
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
         {
             logger.LogWarning(ex, "Refresh failed for feed {FeedId} ({Url})", feed.Id, feed.FeedUrl);
-            return FeedRefreshResult.Failed($"Could not fetch the feed: {ex.Message}");
+            return await RecordFailureAsync(db, feed, ct, $"Could not fetch the feed: {ex.Message}");
         }
         catch (XmlException ex)
         {
             logger.LogWarning(ex, "Parse failed for feed {FeedId} ({Url})", feed.Id, feed.FeedUrl);
-            return FeedRefreshResult.Failed("The feed could not be parsed as RSS/Atom XML.");
+            return await RecordFailureAsync(db, feed, ct, "The feed could not be parsed as RSS/Atom XML.");
         }
 
         if (string.IsNullOrWhiteSpace(feed.Title) && !string.IsNullOrWhiteSpace(parsed.Title))
@@ -86,6 +86,7 @@ internal sealed class FeedRefreshService(
         }
 
         feed.LastRefreshedUtc = DateTime.UtcNow;
+        feed.LastRefreshError = null;
         await db.SaveChangesAsync(ct);
 
         var feedTitle = feed.Title ?? feed.OriginalUrl;
@@ -102,5 +103,13 @@ internal sealed class FeedRefreshService(
         await retentionService.EnforceFeedAsync(feed.Id, ct);
 
         return FeedRefreshResult.Ok(newEpisodes.Count);
+    }
+
+    private static async Task<FeedRefreshResult> RecordFailureAsync(AppDbContext db, Feed feed, CancellationToken ct, string error)
+    {
+        feed.LastRefreshedUtc = DateTime.UtcNow;
+        feed.LastRefreshError = error;
+        await db.SaveChangesAsync(ct);
+        return FeedRefreshResult.Failed(error);
     }
 }

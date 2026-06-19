@@ -1,8 +1,10 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using VibeCast.Data;
 using VibeCast.Downloads;
 using VibeCast.Episodes;
 using VibeCast.Feeds;
+using VibeCast.Logging;
 using VibeCast.Playback;
 using VibeCast.Retention;
 using VibeCast.Shutdown;
@@ -23,13 +25,15 @@ internal static class HostRunner
     {
         try
         {
-            RunAsync(args, trayContext).GetAwaiter().GetResult();
+            RunAsync(args, uiSyncContext, trayContext).GetAwaiter().GetResult();
         }
         catch (Exception ex)
         {
-            // Structured logging arrives in a later phase; surface fatal startup
-            // failures loudly for now rather than failing silently.
-            Console.Error.WriteLine($"VibeCast host failed: {ex}");
+            // No DI container to resolve ILogger from if startup itself failed
+            // (e.g. every port attempt exhausted) -- write directly.
+            Directory.CreateDirectory(AppPaths.LogsDirectory);
+            using var bootstrapLogging = new FileLoggerProvider(AppPaths.LogsDirectory);
+            bootstrapLogging.CreateLogger(nameof(HostRunner)).LogCritical(ex, "VibeCast host failed to start");
         }
         finally
         {
@@ -37,11 +41,14 @@ internal static class HostRunner
         }
     }
 
-    private static async Task RunAsync(string[] args, TrayApplicationContext trayContext)
+    private static async Task RunAsync(string[] args, SynchronizationContext uiSyncContext, TrayApplicationContext trayContext)
     {
         Directory.CreateDirectory(AppPaths.DownloadsDirectory);
         Directory.CreateDirectory(AppPaths.LogsDirectory);
 
+        // config.json not existing yet is the real "first run" signal -- AppConfig.Load()
+        // always returns a fresh instance with HasOfferedDesktopShortcut = false either way.
+        var isFirstRun = !File.Exists(AppPaths.ConfigFile);
         var config = AppConfig.Load();
         var preferredPort = config.PreferredPort ?? PortBinder.DefaultPort;
 
@@ -55,7 +62,15 @@ internal static class HostRunner
         // (what a second instance reads); config.json is the sticky preference.
         RunLock.Write(port);
         config.PreferredPort = port;
+        if (isFirstRun)
+        {
+            config.HasOfferedDesktopShortcut = true;
+        }
+
         config.Save();
+
+        app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("VibeCast.Startup")
+            .LogInformation("VibeCast listening on port {Port}", port);
 
         trayContext.HostLifetime = app.Lifetime;
         trayContext.DownloadTracker = app.Services.GetRequiredService<DownloadProgressTracker>();
@@ -63,6 +78,13 @@ internal static class HostRunner
         if (config.TrayEnabled)
         {
             trayContext.ShowTrayIcon(port);
+        }
+
+        if (isFirstRun)
+        {
+            // Must run on the WinForms STA thread (MessageBox needs a live message
+            // loop); RunAsync itself runs on the background host thread.
+            uiSyncContext.Post(_ => trayContext.OfferDesktopShortcut(), null);
         }
 
         SingleInstance.OpenInBrowser(port);
@@ -91,7 +113,7 @@ internal static class HostRunner
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"Shutdown retention cleanup failed: {ex}");
+            services.GetRequiredService<ILogger<RetentionService>>().LogError(ex, "Shutdown retention cleanup failed");
         }
     }
 
@@ -108,12 +130,19 @@ internal static class HostRunner
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"Startup feed refresh failed: {ex}");
+            services.GetRequiredService<ILogger<FeedRefreshService>>().LogError(ex, "Startup feed refresh failed");
         }
     }
 
     private static void ConfigureServices(WebApplicationBuilder builder, AppConfig config)
     {
+        // No console window (OutputType=WinExe) and no %AppData% writes allowed, so
+        // logs/vibecast-YYYYMMDD.log (CLAUDE.md) is the only durable diagnostic trail.
+        builder.Logging.ClearProviders();
+        builder.Logging.AddProvider(new FileLoggerProvider(AppPaths.LogsDirectory));
+        builder.Logging.AddFilter("Microsoft.EntityFrameworkCore", LogLevel.Warning);
+        builder.Logging.AddFilter("Microsoft.AspNetCore", LogLevel.Warning);
+
         builder.Services.AddRazorComponents()
             .AddInteractiveServerComponents();
 

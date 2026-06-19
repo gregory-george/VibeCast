@@ -37,7 +37,7 @@ internal sealed class Feed
     /// <summary>
     /// Per-feed override of the keep-last-N backstop (caps downloaded files on disk,
     /// not DB rows -- additive model keeps every record forever). Null means "use the
-    /// global default" (<see cref="VibeCast.Retention.RetentionService.DefaultKeepLastCount"/>).
+    /// global default" (<see cref="VibeCast.AppHost.AppConfig.DefaultKeepLastCount"/>).
     /// 0 disables the backstop for this feed. RSS only -- YouTube never downloads files.
     /// </summary>
     public int? KeepLastCount { get; set; }
@@ -45,6 +45,13 @@ internal sealed class Feed
     public DateTime DateAddedUtc { get; set; }
 
     public DateTime? LastRefreshedUtc { get; set; }
+
+    /// <summary>
+    /// The error from the most recent refresh attempt, if it failed; null after a
+    /// successful refresh. Feed-health surface for the Feeds page -- distinct from
+    /// LastRefreshedUtc, which only tracks when a refresh was last attempted.
+    /// </summary>
+    public string? LastRefreshError { get; set; }
 
     public List<Episode> Episodes { get; set; } = [];
 }

@@ -41,6 +41,13 @@ internal sealed class AppConfig
     /// </summary>
     public int GraceWindowSeconds { get; set; } = 20;
 
+    /// <summary>
+    /// True once the first-run "create a desktop shortcut?" prompt has been shown
+    /// (regardless of answer), so it never asks again. config.json not existing yet
+    /// is what identifies first run -- see <see cref="Load"/>.
+    /// </summary>
+    public bool HasOfferedDesktopShortcut { get; set; }
+
     public static AppConfig Load()
     {
         if (!File.Exists(AppPaths.ConfigFile))

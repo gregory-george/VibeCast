@@ -64,7 +64,13 @@ else
                     <td>@feed.Type</td>
                     <td>@feed.Slug</td>
                     <td>@feed.EpisodeCount</td>
-                    <td>@(feed.LastRefreshedUtc?.ToLocalTime().ToString("g") ?? "never")</td>
+                    <td>
+                        @(feed.LastRefreshedUtc?.ToLocalTime().ToString("g") ?? "never")
+                        @if (feed.LastRefreshError is not null)
+                        {
+                            <span style="color: #c0392b;" title="@feed.LastRefreshError">&#9888; failed</span>
+                        }
+                    </td>
                     <td>
                         @if (feed.Type == FeedType.Rss)
                         {
@@ -102,7 +108,7 @@ else
         await using var db = await DbContextFactory.CreateDbContextAsync(cts.Token);
         feeds = await db.Feeds
             .OrderBy(f => f.Title)
-            .Select(f => new FeedRow(f.Id, f.Title ?? f.OriginalUrl, f.Type, f.Slug, f.Episodes.Count, f.LastRefreshedUtc, f.AutoDownloadEnabled, f.KeepLastCount))
+            .Select(f => new FeedRow(f.Id, f.Title ?? f.OriginalUrl, f.Type, f.Slug, f.Episodes.Count, f.LastRefreshedUtc, f.AutoDownloadEnabled, f.KeepLastCount, f.LastRefreshError))
             .ToListAsync(cts.Token);
     }
 
@@ -195,5 +201,5 @@ else
         cts.Dispose();
     }
 
-    private sealed record FeedRow(int Id, string Title, FeedType Type, string Slug, int EpisodeCount, DateTime? LastRefreshedUtc, bool AutoDownloadEnabled, int? KeepLastCount);
+    private sealed record FeedRow(int Id, string Title, FeedType Type, string Slug, int EpisodeCount, DateTime? LastRefreshedUtc, bool AutoDownloadEnabled, int? KeepLastCount, string? LastRefreshError);
 }
