@@ -7,6 +7,7 @@
 @inject DownloadProgressTracker ProgressTracker
 @inject PlaybackService PlaybackService
 @using Microsoft.EntityFrameworkCore
+@using VibeCast.AppHost
 @using VibeCast.Data
 @using VibeCast.Downloads
 @using VibeCast.Episodes
@@ -65,7 +66,7 @@
                     <li class="@(selectedEpisodeId == episode.Id ? "selected" : null)" @onclick="() => SelectEpisodeAsync(episode.Id)">
                         <div class="episode-title">@episode.Title</div>
                         <div class="episode-meta">
-                            @episode.FeedTitle &middot; @episode.PublishedAtUtc.ToLocalTime().ToString("MMM d, yyyy") &middot; @FormatDuration(episode.DurationSeconds)
+                            @episode.FeedTitle &middot; @episode.PublishedAtUtc.ToLocalTime().ToString("MMM d, yyyy") &middot; @FormatDuration(episode.DurationSeconds) &middot; @FormatFileSize(episode.FileSizeBytes)
                         </div>
                     </li>
                 }
@@ -82,7 +83,7 @@
         {
             <h2>@detail.Title</h2>
             <p class="episode-meta">
-                @detail.FeedTitle &middot; @detail.PublishedAtUtc.ToLocalTime().ToString("MMM d, yyyy") &middot; @FormatDuration(detail.DurationSeconds)
+                @detail.FeedTitle &middot; @detail.PublishedAtUtc.ToLocalTime().ToString("MMM d, yyyy") &middot; @FormatDuration(detail.DurationSeconds) &middot; @FormatFileSize(detail.FileSizeBytes)
             </p>
 
             <p>
@@ -158,11 +159,24 @@
             query = query.Where(e => e.FeedId == feedId);
         }
 
-        episodes = await query
+        var rows = await query
             .OrderByDescending(e => e.PublishedAtUtc)
-            .Select(e => new EpisodeListItem(e.Id, e.Title, e.Feed.Title ?? e.Feed.OriginalUrl, e.PublishedAtUtc, e.DurationSeconds))
+            .Select(e => new
+            {
+                e.Id,
+                e.Title,
+                FeedTitle = e.Feed.Title ?? e.Feed.OriginalUrl,
+                e.PublishedAtUtc,
+                e.DurationSeconds,
+                FeedSlug = e.Feed.Slug,
+                e.DownloadedFileName,
+            })
             .Take(200)
             .ToListAsync(cts.Token);
+
+        episodes = rows
+            .Select(r => new EpisodeListItem(r.Id, r.Title, r.FeedTitle, r.PublishedAtUtc, r.DurationSeconds, GetFileSize(r.FeedSlug, r.DownloadedFileName)))
+            .ToList();
     }
 
     private async Task SelectFeedAsync(int? feedId)
@@ -186,10 +200,28 @@
         selectedEpisodeId = episodeId;
 
         await using var db = await DbContextFactory.CreateDbContextAsync(cts.Token);
-        detail = await db.Episodes
+        var row = await db.Episodes
             .Where(e => e.Id == episodeId)
-            .Select(e => new EpisodeDetail(e.Id, e.Title, e.Feed.Title ?? e.Feed.OriginalUrl, e.PublishedAtUtc, e.DurationSeconds, e.DescriptionHtml, e.IsPlayed, e.IsArchived, e.EnclosureUrl != null, e.IsDownloaded))
+            .Select(e => new
+            {
+                e.Id,
+                e.Title,
+                FeedTitle = e.Feed.Title ?? e.Feed.OriginalUrl,
+                e.PublishedAtUtc,
+                e.DurationSeconds,
+                e.DescriptionHtml,
+                e.IsPlayed,
+                e.IsArchived,
+                IsRss = e.EnclosureUrl != null,
+                e.IsDownloaded,
+                FeedSlug = e.Feed.Slug,
+                e.DownloadedFileName,
+            })
             .SingleOrDefaultAsync(cts.Token);
+
+        detail = row is null
+            ? null
+            : new EpisodeDetail(row.Id, row.Title, row.FeedTitle, row.PublishedAtUtc, row.DurationSeconds, row.DescriptionHtml, row.IsPlayed, row.IsArchived, row.IsRss, row.IsDownloaded, GetFileSize(row.FeedSlug, row.DownloadedFileName));
     }
 
     private string GetDownloadStatusText(EpisodeDetail current)
@@ -270,6 +302,37 @@
         return span.TotalHours >= 1 ? span.ToString(@"h\:mm\:ss") : span.ToString(@"m\:ss");
     }
 
+    private static long? GetFileSize(string feedSlug, string? downloadedFileName)
+    {
+        if (downloadedFileName is null)
+        {
+            return null;
+        }
+
+        var filePath = Path.Combine(AppPaths.DownloadsDirectory, feedSlug, downloadedFileName);
+        var info = new FileInfo(filePath);
+        return info.Exists ? info.Length : null;
+    }
+
+    private static string FormatFileSize(long? bytes)
+    {
+        if (bytes is null)
+        {
+            return string.Empty;
+        }
+
+        const double kb = 1024;
+        const double mb = kb * 1024;
+        const double gb = mb * 1024;
+
+        return bytes.Value switch
+        {
+            >= (long)gb => $"{bytes.Value / gb:0.00} GB",
+            >= (long)mb => $"{bytes.Value / mb:0.00} MB",
+            _ => $"{bytes.Value / kb:0.00} KB",
+        };
+    }
+
     public void Dispose()
     {
         ProgressTracker.Changed -= OnProgressChanged;
@@ -279,7 +342,7 @@
 
     private sealed record FeedSummary(int Id, string Title, int ActiveCount);
 
-    private sealed record EpisodeListItem(int Id, string Title, string FeedTitle, DateTime PublishedAtUtc, int? DurationSeconds);
+    private sealed record EpisodeListItem(int Id, string Title, string FeedTitle, DateTime PublishedAtUtc, int? DurationSeconds, long? FileSizeBytes);
 
-    private sealed record EpisodeDetail(int Id, string Title, string FeedTitle, DateTime PublishedAtUtc, int? DurationSeconds, string? DescriptionHtml, bool IsPlayed, bool IsArchived, bool IsRss, bool IsDownloaded);
+    private sealed record EpisodeDetail(int Id, string Title, string FeedTitle, DateTime PublishedAtUtc, int? DurationSeconds, string? DescriptionHtml, bool IsPlayed, bool IsArchived, bool IsRss, bool IsDownloaded, long? FileSizeBytes);
 }
