@@ -1,0 +1,272 @@
+@page "/"
+@rendermode InteractiveServer
+@inject IDbContextFactory<AppDbContext> DbContextFactory
+@inject EpisodeStateService EpisodeStateService
+@inject ShowNotesSanitizer ShowNotesSanitizer
+@inject DownloadQueue DownloadQueue
+@inject DownloadProgressTracker ProgressTracker
+@using Microsoft.EntityFrameworkCore
+@using VibeCast.Data
+@using VibeCast.Downloads
+@using VibeCast.Episodes
+@implements IDisposable
+
+<PageTitle>VibeCast</PageTitle>
+
+<div class="library">
+    <nav class="feed-sidebar">
+        <h1>VibeCast</h1>
+        <ul>
+            <li>
+                <button class="@(selectedFeedId is null ? "selected" : null)" @onclick="() => SelectFeedAsync(null)">
+                    All feeds
+                </button>
+            </li>
+            @if (feeds is not null)
+            {
+                @foreach (var feed in feeds)
+                {
+                    <li>
+                        <button class="@(selectedFeedId == feed.Id ? "selected" : null)" @onclick="() => SelectFeedAsync(feed.Id)">
+                            @feed.Title <span class="count">@feed.ActiveCount</span>
+                        </button>
+                    </li>
+                }
+            }
+        </ul>
+        <p><a href="/feeds">Manage feeds</a></p>
+        <p><a href="/downloads">Downloads</a></p>
+    </nav>
+
+    <section class="episode-list">
+        <div class="episode-list-header">
+            <h2>@(showArchived ? "Archived" : "Episodes")</h2>
+            <label>
+                <input type="checkbox" checked="@showArchived" @onchange="ToggleShowArchivedAsync" />
+                Show archived
+            </label>
+        </div>
+
+        @if (episodes is null)
+        {
+            <p>Loading...</p>
+        }
+        else if (episodes.Count == 0)
+        {
+            <p>@(showArchived ? "No archived episodes." : "No episodes yet.")</p>
+        }
+        else
+        {
+            <ul>
+                @foreach (var episode in episodes)
+                {
+                    <li class="@(selectedEpisodeId == episode.Id ? "selected" : null)" @onclick="() => SelectEpisodeAsync(episode.Id)">
+                        <div class="episode-title">@episode.Title</div>
+                        <div class="episode-meta">
+                            @episode.FeedTitle &middot; @episode.PublishedAtUtc.ToLocalTime().ToString("MMM d, yyyy") &middot; @FormatDuration(episode.DurationSeconds)
+                        </div>
+                    </li>
+                }
+            </ul>
+        }
+    </section>
+
+    <section class="episode-detail">
+        @if (detail is null)
+        {
+            <p>Select an episode.</p>
+        }
+        else
+        {
+            <h2>@detail.Title</h2>
+            <p class="episode-meta">
+                @detail.FeedTitle &middot; @detail.PublishedAtUtc.ToLocalTime().ToString("MMM d, yyyy") &middot; @FormatDuration(detail.DurationSeconds)
+            </p>
+
+            <p>
+                <label>
+                    <input type="checkbox" checked="@detail.IsPlayed" @onchange="() => TogglePlayedAsync(detail)" />
+                    Played
+                </label>
+                @if (detail.IsArchived)
+                {
+                    <button @onclick="() => UnarchiveAsync(detail.Id)">Unarchive</button>
+                }
+            </p>
+
+            @if (detail.IsRss)
+            {
+                <p>
+                    @GetDownloadStatusText(detail)
+                    @if (CanManuallyDownload(detail))
+                    {
+                        <button @onclick="() => DownloadNow(detail)">Download</button>
+                    }
+                </p>
+            }
+
+            <div class="show-notes">
+                @((MarkupString)ShowNotesSanitizer.Sanitize(detail.DescriptionHtml))
+            </div>
+        }
+    </section>
+</div>
+
+@code {
+    private List<FeedSummary>? feeds;
+    private List<EpisodeListItem>? episodes;
+    private EpisodeDetail? detail;
+    private int? selectedFeedId;
+    private int? selectedEpisodeId;
+    private bool showArchived;
+    private readonly CancellationTokenSource cts = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        ProgressTracker.Changed += OnProgressChanged;
+        await LoadFeedsAsync();
+        await LoadEpisodesAsync();
+    }
+
+    private void OnProgressChanged() => InvokeAsync(StateHasChanged);
+
+    private async Task LoadFeedsAsync()
+    {
+        await using var db = await DbContextFactory.CreateDbContextAsync(cts.Token);
+        feeds = await db.Feeds
+            .OrderBy(f => f.Title)
+            .Select(f => new FeedSummary(f.Id, f.Title ?? f.OriginalUrl, f.Episodes.Count(e => !e.IsArchived)))
+            .ToListAsync(cts.Token);
+    }
+
+    private async Task LoadEpisodesAsync()
+    {
+        await using var db = await DbContextFactory.CreateDbContextAsync(cts.Token);
+        var query = db.Episodes.Where(e => e.IsArchived == showArchived);
+
+        if (selectedFeedId is { } feedId)
+        {
+            query = query.Where(e => e.FeedId == feedId);
+        }
+
+        episodes = await query
+            .OrderByDescending(e => e.PublishedAtUtc)
+            .Select(e => new EpisodeListItem(e.Id, e.Title, e.Feed.Title ?? e.Feed.OriginalUrl, e.PublishedAtUtc, e.DurationSeconds))
+            .Take(200)
+            .ToListAsync(cts.Token);
+    }
+
+    private async Task SelectFeedAsync(int? feedId)
+    {
+        selectedFeedId = feedId;
+        selectedEpisodeId = null;
+        detail = null;
+        await LoadEpisodesAsync();
+    }
+
+    private async Task ToggleShowArchivedAsync(ChangeEventArgs e)
+    {
+        showArchived = e.Value is true;
+        selectedEpisodeId = null;
+        detail = null;
+        await LoadEpisodesAsync();
+    }
+
+    private async Task SelectEpisodeAsync(int episodeId)
+    {
+        selectedEpisodeId = episodeId;
+
+        await using var db = await DbContextFactory.CreateDbContextAsync(cts.Token);
+        detail = await db.Episodes
+            .Where(e => e.Id == episodeId)
+            .Select(e => new EpisodeDetail(e.Id, e.Title, e.Feed.Title ?? e.Feed.OriginalUrl, e.PublishedAtUtc, e.DurationSeconds, e.DescriptionHtml, e.IsPlayed, e.IsArchived, e.EnclosureUrl != null, e.IsDownloaded))
+            .SingleOrDefaultAsync(cts.Token);
+    }
+
+    private string GetDownloadStatusText(EpisodeDetail current)
+    {
+        var snapshot = ProgressTracker.Get(current.Id);
+        if (snapshot is not null)
+        {
+            return snapshot.Status switch
+            {
+                DownloadStatus.Queued => "Queued for download.",
+                DownloadStatus.Downloading => $"Downloading... {snapshot.FormatProgress()}",
+                DownloadStatus.Completed => "Downloaded.",
+                DownloadStatus.Failed => $"Download failed: {snapshot.ErrorMessage}",
+                DownloadStatus.Canceled => "Download canceled.",
+                _ => string.Empty,
+            };
+        }
+
+        return current.IsDownloaded ? "Downloaded." : "Not downloaded.";
+    }
+
+    private bool CanManuallyDownload(EpisodeDetail current)
+    {
+        if (current.IsDownloaded)
+        {
+            return false;
+        }
+
+        var snapshot = ProgressTracker.Get(current.Id);
+        return snapshot is null or { Status: DownloadStatus.Failed or DownloadStatus.Canceled };
+    }
+
+    private void DownloadNow(EpisodeDetail current) =>
+        DownloadQueue.Enqueue(current.Id, current.Title, current.FeedTitle);
+
+    private async Task TogglePlayedAsync(EpisodeDetail current)
+    {
+        if (current.IsPlayed)
+        {
+            await UnarchiveAsync(current.Id);
+        }
+        else
+        {
+            await EpisodeStateService.MarkAsPlayedAsync(current.Id, cts.Token);
+            await RefreshAfterMutationAsync(current.Id);
+        }
+    }
+
+    private async Task UnarchiveAsync(int episodeId)
+    {
+        await EpisodeStateService.UnarchiveAsync(episodeId, cts.Token);
+        await RefreshAfterMutationAsync(episodeId);
+    }
+
+    private async Task RefreshAfterMutationAsync(int episodeId)
+    {
+        await LoadFeedsAsync();
+        await LoadEpisodesAsync();
+
+        if (selectedEpisodeId == episodeId)
+        {
+            await SelectEpisodeAsync(episodeId);
+        }
+    }
+
+    private static string FormatDuration(int? seconds)
+    {
+        if (seconds is null)
+        {
+            return string.Empty;
+        }
+
+        var span = TimeSpan.FromSeconds(seconds.Value);
+        return span.TotalHours >= 1 ? span.ToString(@"h\:mm\:ss") : span.ToString(@"m\:ss");
+    }
+
+    public void Dispose()
+    {
+        ProgressTracker.Changed -= OnProgressChanged;
+        cts.Cancel();
+        cts.Dispose();
+    }
+
+    private sealed record FeedSummary(int Id, string Title, int ActiveCount);
+
+    private sealed record EpisodeListItem(int Id, string Title, string FeedTitle, DateTime PublishedAtUtc, int? DurationSeconds);
+
+    private sealed record EpisodeDetail(int Id, string Title, string FeedTitle, DateTime PublishedAtUtc, int? DurationSeconds, string? DescriptionHtml, bool IsPlayed, bool IsArchived, bool IsRss, bool IsDownloaded);
+}

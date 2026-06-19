@@ -1,0 +1,85 @@
+using System.Text.RegularExpressions;
+
+namespace VibeCast.Feeds;
+
+/// <summary>
+/// Resolves any of @handle / /channel/UC.../ /c/custom / /user/name / a raw UC...
+/// channel ID / an already-resolved videos.xml feed URL down to a fetchable feed
+/// URL. No API key: the UC... ID is scraped from the channel page's
+/// &lt;meta itemprop="channelId"&gt; tag or its canonical /channel/&lt;id&gt; link.
+/// </summary>
+internal sealed partial class YouTubeChannelResolver(HttpClient httpClient)
+{
+    public async Task<YouTubeChannelResolution?> TryResolveAsync(string input, CancellationToken ct)
+    {
+        input = input.Trim();
+
+        if (RawChannelIdPattern().IsMatch(input))
+        {
+            return YouTubeChannelResolution.FromChannelId(input);
+        }
+
+        if (!Uri.TryCreate(input, UriKind.Absolute, out var uri))
+        {
+            return null;
+        }
+
+        var host = uri.Host.ToLowerInvariant();
+        if (!host.Contains("youtube.com", StringComparison.Ordinal) && !host.Contains("youtu.be", StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        // Raw feed URL fallback: already a videos.xml URL, use as-is.
+        if (uri.AbsolutePath.Contains("/feeds/videos.xml", StringComparison.OrdinalIgnoreCase))
+        {
+            return YouTubeChannelResolution.FromRawFeedUrl(uri.ToString());
+        }
+
+        // /channel/UC... carries the ID directly; no scrape needed.
+        var channelMatch = ChannelPathPattern().Match(uri.AbsolutePath);
+        if (channelMatch.Success)
+        {
+            return YouTubeChannelResolution.FromChannelId(channelMatch.Groups["id"].Value);
+        }
+
+        // /@handle, /c/custom, /user/name all require scraping the channel page,
+        // since the feed endpoint only accepts the UC... channel ID.
+        var scrapedId = await ScrapeChannelIdAsync(uri, ct);
+        return scrapedId is null ? null : YouTubeChannelResolution.FromChannelId(scrapedId);
+    }
+
+    private async Task<string?> ScrapeChannelIdAsync(Uri channelPageUrl, CancellationToken ct)
+    {
+        string html;
+        try
+        {
+            html = await httpClient.GetStringAsync(channelPageUrl, ct);
+        }
+        catch (HttpRequestException)
+        {
+            return null;
+        }
+
+        var metaMatch = MetaChannelIdPattern().Match(html);
+        if (metaMatch.Success)
+        {
+            return metaMatch.Groups["id"].Value;
+        }
+
+        var canonicalMatch = CanonicalChannelIdPattern().Match(html);
+        return canonicalMatch.Success ? canonicalMatch.Groups["id"].Value : null;
+    }
+
+    [GeneratedRegex("^UC[A-Za-z0-9_-]{20,}$")]
+    private static partial Regex RawChannelIdPattern();
+
+    [GeneratedRegex("/channel/(?<id>UC[A-Za-z0-9_-]{10,})")]
+    private static partial Regex ChannelPathPattern();
+
+    [GeneratedRegex("<meta\\s+itemprop=\"channelId\"\\s+content=\"(?<id>UC[A-Za-z0-9_-]{10,})\"")]
+    private static partial Regex MetaChannelIdPattern();
+
+    [GeneratedRegex("<link\\s+rel=\"canonical\"\\s+href=\"https://www\\.youtube\\.com/channel/(?<id>UC[A-Za-z0-9_-]{10,})\"")]
+    private static partial Regex CanonicalChannelIdPattern();
+}

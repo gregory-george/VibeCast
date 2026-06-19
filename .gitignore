@@ -1,0 +1,18 @@
+## .NET build output
+bin/
+obj/
+
+## IDE
+.vs/
+.vscode/
+*.user
+
+## VibeCast portable runtime state (regenerated at runtime, not source)
+config.json
+run.lock
+podcasts.db
+podcasts.db-shm
+podcasts.db-wal
+podcasts.db.bak
+downloads/
+logs/

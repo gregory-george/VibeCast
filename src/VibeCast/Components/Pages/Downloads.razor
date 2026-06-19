@@ -1,0 +1,70 @@
+@page "/downloads"
+@rendermode InteractiveServer
+@inject DownloadProgressTracker ProgressTracker
+@inject DownloadCancellationRegistry CancellationRegistry
+@using VibeCast.Downloads
+@implements IDisposable
+
+<PageTitle>Downloads - VibeCast</PageTitle>
+
+<h1>Downloads</h1>
+
+<p><a href="/">Back to library</a></p>
+
+@{
+    var snapshots = ProgressTracker.GetAll().OrderByDescending(s => s.Status == DownloadStatus.Downloading).ToList();
+}
+
+@if (snapshots.Count == 0)
+{
+    <p>No downloads yet.</p>
+}
+else
+{
+    <table>
+        <thead>
+            <tr>
+                <th>Episode</th>
+                <th>Feed</th>
+                <th>Status</th>
+                <th>Progress</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var snapshot in snapshots)
+            {
+                <tr>
+                    <td>@snapshot.EpisodeTitle</td>
+                    <td>@snapshot.FeedTitle</td>
+                    <td>
+                        @snapshot.Status
+                        @if (snapshot.Status == DownloadStatus.Failed && snapshot.ErrorMessage is not null)
+                        {
+                            <span class="error"> - @snapshot.ErrorMessage</span>
+                        }
+                    </td>
+                    <td>@FormatProgress(snapshot)</td>
+                    <td>
+                        @if (snapshot.Status is DownloadStatus.Queued or DownloadStatus.Downloading)
+                        {
+                            <button @onclick="() => Cancel(snapshot.EpisodeId)">Cancel</button>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    protected override void OnInitialized() => ProgressTracker.Changed += OnChanged;
+
+    private void OnChanged() => InvokeAsync(StateHasChanged);
+
+    private void Cancel(int episodeId) => CancellationRegistry.TryCancel(episodeId);
+
+    private static string FormatProgress(DownloadProgressSnapshot snapshot) => snapshot.FormatProgress();
+
+    public void Dispose() => ProgressTracker.Changed -= OnChanged;
+}

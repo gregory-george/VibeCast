@@ -1,0 +1,171 @@
+@page "/feeds"
+@rendermode InteractiveServer
+@inject FeedSubscriptionService SubscriptionService
+@inject FeedRefreshService RefreshService
+@inject IDbContextFactory<AppDbContext> DbContextFactory
+@using Microsoft.EntityFrameworkCore
+@using VibeCast.Data
+@using VibeCast.Feeds
+@implements IDisposable
+
+<PageTitle>Feeds - VibeCast</PageTitle>
+
+<h1>Feeds</h1>
+
+<p>
+    <input @bind="newFeedUrl" @bind:event="oninput" placeholder="Podcast RSS or YouTube channel URL" style="width: 28rem;" />
+    <button @onclick="AddFeedAsync" disabled="@isAdding">Add</button>
+</p>
+
+@if (!string.IsNullOrEmpty(statusMessage))
+{
+    <p>@statusMessage</p>
+}
+
+<p>
+    <button @onclick="RefreshAllAsync" disabled="@isRefreshing">Refresh all</button>
+    @if (isRefreshing)
+    {
+        <span> refreshing...</span>
+    }
+</p>
+
+@if (feeds is null)
+{
+    <p>Loading...</p>
+}
+else if (feeds.Count == 0)
+{
+    <p>No feeds yet.</p>
+}
+else
+{
+    <table>
+        <thead>
+            <tr>
+                <th>Title</th>
+                <th>Type</th>
+                <th>Slug</th>
+                <th>Episodes</th>
+                <th>Last refreshed</th>
+                <th>Auto-download</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var feed in feeds)
+            {
+                <tr>
+                    <td>@feed.Title</td>
+                    <td>@feed.Type</td>
+                    <td>@feed.Slug</td>
+                    <td>@feed.EpisodeCount</td>
+                    <td>@(feed.LastRefreshedUtc?.ToLocalTime().ToString("g") ?? "never")</td>
+                    <td>
+                        @if (feed.Type == FeedType.Rss)
+                        {
+                            <input type="checkbox" checked="@feed.AutoDownloadEnabled" @onchange="e => ToggleAutoDownloadAsync(feed.Id, e)" />
+                        }
+                    </td>
+                    <td><button @onclick="() => RefreshOneAsync(feed.Id)">Refresh</button></td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private List<FeedRow>? feeds;
+    private string newFeedUrl = string.Empty;
+    private bool isAdding;
+    private bool isRefreshing;
+    private string? statusMessage;
+    private CancellationTokenSource cts = new();
+
+    protected override async Task OnInitializedAsync() => await LoadFeedsAsync();
+
+    private async Task LoadFeedsAsync()
+    {
+        await using var db = await DbContextFactory.CreateDbContextAsync(cts.Token);
+        feeds = await db.Feeds
+            .OrderBy(f => f.Title)
+            .Select(f => new FeedRow(f.Id, f.Title ?? f.OriginalUrl, f.Type, f.Slug, f.Episodes.Count, f.LastRefreshedUtc, f.AutoDownloadEnabled))
+            .ToListAsync(cts.Token);
+    }
+
+    private async Task ToggleAutoDownloadAsync(int feedId, ChangeEventArgs e)
+    {
+        await using var db = await DbContextFactory.CreateDbContextAsync(cts.Token);
+        var feed = await db.Feeds.FindAsync([feedId], cts.Token);
+        if (feed is null)
+        {
+            return;
+        }
+
+        feed.AutoDownloadEnabled = e.Value is true;
+        await db.SaveChangesAsync(cts.Token);
+        await LoadFeedsAsync();
+    }
+
+    private async Task AddFeedAsync()
+    {
+        if (string.IsNullOrWhiteSpace(newFeedUrl) || isAdding)
+        {
+            return;
+        }
+
+        isAdding = true;
+        statusMessage = null;
+        try
+        {
+            var result = await SubscriptionService.AddFeedAsync(newFeedUrl, cts.Token);
+            statusMessage = result.Success
+                ? $"Added with {result.EpisodeCount} episode(s)."
+                : result.Error;
+
+            if (result.Success)
+            {
+                newFeedUrl = string.Empty;
+                await LoadFeedsAsync();
+            }
+        }
+        finally
+        {
+            isAdding = false;
+        }
+    }
+
+    private async Task RefreshAllAsync()
+    {
+        if (isRefreshing)
+        {
+            return;
+        }
+
+        isRefreshing = true;
+        try
+        {
+            await RefreshService.RefreshAllAsync(cts.Token);
+            await LoadFeedsAsync();
+        }
+        finally
+        {
+            isRefreshing = false;
+        }
+    }
+
+    private async Task RefreshOneAsync(int feedId)
+    {
+        var result = await RefreshService.RefreshFeedAsync(feedId, cts.Token);
+        statusMessage = result.Success ? $"Added {result.AddedCount} new episode(s)." : result.Error;
+        await LoadFeedsAsync();
+    }
+
+    public void Dispose()
+    {
+        cts.Cancel();
+        cts.Dispose();
+    }
+
+    private sealed record FeedRow(int Id, string Title, FeedType Type, string Slug, int EpisodeCount, DateTime? LastRefreshedUtc, bool AutoDownloadEnabled);
+}
