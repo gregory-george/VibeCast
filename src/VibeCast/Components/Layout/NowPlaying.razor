@@ -1,6 +1,7 @@
 @implements IAsyncDisposable
 @inject PlaybackService PlaybackService
 @inject IJSRuntime JS
+@inject VibeCast.AppHost.AppConfig Config
 @using System.Diagnostics
 @using VibeCast.Playback
 
@@ -105,7 +106,7 @@ else if (PlaybackService.IsAwaitingDownload)
             audioModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/audioPlayer.js");
             await audioModule.InvokeVoidAsync("init", audioElement, dotNetRef);
             await audioModule.InvokeVoidAsync("setSource", audioElement, current.MediaUrl, current.InitialPositionSeconds);
-            rssRate = 1.0m;
+            rssRate = Config.DefaultPlaybackSpeed;
             await audioModule.InvokeVoidAsync("setRate", audioElement, (double)rssRate);
         }
         else
@@ -113,7 +114,12 @@ else if (PlaybackService.IsAwaitingDownload)
             youtubeModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/youtubePlayer.js");
             await youtubeModule.InvokeVoidAsync("init", youtubeElementId, current.YouTubeVideoId, current.InitialPositionSeconds, dotNetRef);
             youtubeRates = (await youtubeModule.InvokeAsync<double[]>("getAvailablePlaybackRates")).ToList();
-            youtubeRate = 1.0;
+            // YouTube's embed only honors its own native stepped menu, so pick the
+            // closest available rate to the configured default rather than faking it.
+            youtubeRate = youtubeRates.Count > 0
+                ? youtubeRates.OrderBy(r => Math.Abs(r - (double)Config.DefaultPlaybackSpeed)).First()
+                : 1.0;
+            await youtubeModule.InvokeVoidAsync("setPlaybackRate", youtubeRate);
             StateHasChanged();
         }
 

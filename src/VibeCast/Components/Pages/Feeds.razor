@@ -8,7 +8,6 @@
 @using VibeCast.AppHost
 @using VibeCast.Data
 @using VibeCast.Feeds
-@using VibeCast.Retention
 @implements IDisposable
 
 <PageTitle>Feeds - VibeCast</PageTitle>
@@ -31,13 +30,7 @@
     {
         <span> refreshing...</span>
     }
-</p>
-
-<p>
-    <label>
-        <input type="checkbox" checked="@Config.AutoMarkOnCompletion" @onchange="ToggleAutoMarkOnCompletionAsync" />
-        Auto-mark episodes as played when playback completes
-    </label>
+    &mdash; <a href="/settings">Settings</a>
 </p>
 
 @if (feeds is null)
@@ -83,7 +76,7 @@ else
                         {
                             <input type="number" min="0" style="width: 5rem;"
                                    value="@(feed.KeepLastCount?.ToString() ?? "")"
-                                   placeholder="@RetentionService.DefaultKeepLastCount"
+                                   placeholder="@Config.DefaultKeepLastCount"
                                    @onchange="e => UpdateKeepLastCountAsync(feed.Id, e)" />
                         }
                     </td>
@@ -140,12 +133,6 @@ else
         feed.KeepLastCount = string.IsNullOrWhiteSpace(text) ? null : int.Parse(text);
         await db.SaveChangesAsync(cts.Token);
         await LoadFeedsAsync();
-    }
-
-    private void ToggleAutoMarkOnCompletionAsync(ChangeEventArgs e)
-    {
-        Config.AutoMarkOnCompletion = e.Value is true;
-        Config.Save();
     }
 
     private async Task AddFeedAsync()

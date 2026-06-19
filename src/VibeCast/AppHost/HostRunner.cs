@@ -60,13 +60,19 @@ internal static class HostRunner
         trayContext.HostLifetime = app.Lifetime;
         trayContext.DownloadTracker = app.Services.GetRequiredService<DownloadProgressTracker>();
         trayContext.CancellationRegistry = app.Services.GetRequiredService<DownloadCancellationRegistry>();
-        trayContext.ShowTrayIcon(port);
+        if (config.TrayEnabled)
+        {
+            trayContext.ShowTrayIcon(port);
+        }
 
         SingleInstance.OpenInBrowser(port);
 
         // Refresh-on-open: fire-and-forget so the UI isn't blocked on network
         // calls. Tied to ApplicationStopping so it doesn't outlive the host.
-        _ = RunStartupRefreshAsync(app.Services, app.Lifetime.ApplicationStopping);
+        if (config.RefreshOnOpen)
+        {
+            _ = RunStartupRefreshAsync(app.Services, app.Lifetime.ApplicationStopping);
+        }
 
         await app.WaitForShutdownAsync();
 
@@ -131,6 +137,7 @@ internal static class HostRunner
         builder.Services.AddScoped<EpisodeStateService>();
         builder.Services.AddScoped<PlaybackService>();
         builder.Services.AddScoped<RetentionService>();
+        builder.Services.AddScoped<Opml.OpmlService>();
         builder.Services.AddSingleton<ShowNotesSanitizer>();
 
         builder.Services.AddSingleton<DownloadProgressTracker>();

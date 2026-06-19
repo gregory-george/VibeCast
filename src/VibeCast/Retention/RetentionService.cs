@@ -13,10 +13,11 @@ namespace VibeCast.Retention;
 /// refresh (per feed, from FeedRefreshService) and on shutdown (all feeds, from
 /// HostRunner).
 /// </summary>
-internal sealed class RetentionService(IDbContextFactory<AppDbContext> dbContextFactory, DownloadProgressTracker progressTracker)
+internal sealed class RetentionService(
+    IDbContextFactory<AppDbContext> dbContextFactory,
+    DownloadProgressTracker progressTracker,
+    AppConfig config)
 {
-    public const int DefaultKeepLastCount = 100;
-
     public async Task EnforceAllFeedsAsync(CancellationToken ct)
     {
         await using var db = await dbContextFactory.CreateDbContextAsync(ct);
@@ -37,7 +38,7 @@ internal sealed class RetentionService(IDbContextFactory<AppDbContext> dbContext
             return;
         }
 
-        var keepLast = feed.KeepLastCount ?? DefaultKeepLastCount;
+        var keepLast = feed.KeepLastCount ?? config.DefaultKeepLastCount;
         if (keepLast <= 0)
         {
             return;

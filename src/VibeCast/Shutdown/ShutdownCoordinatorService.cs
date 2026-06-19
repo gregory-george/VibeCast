@@ -1,3 +1,4 @@
+using VibeCast.AppHost;
 using VibeCast.Downloads;
 
 namespace VibeCast.Shutdown;
@@ -15,10 +16,10 @@ internal sealed class ShutdownCoordinatorService(
     CircuitTracker circuitTracker,
     DownloadProgressTracker progressTracker,
     IHostApplicationLifetime lifetime,
+    AppConfig config,
     ILogger<ShutdownCoordinatorService> logger) : BackgroundService
 {
-    public static readonly TimeSpan GraceWindow = TimeSpan.FromSeconds(20);
-
+    private readonly TimeSpan graceWindow = TimeSpan.FromSeconds(Math.Max(1, config.GraceWindowSeconds));
     private readonly Lock gate = new();
     private CancellationTokenSource? graceCts;
     private bool graceElapsed;
@@ -73,7 +74,7 @@ internal sealed class ShutdownCoordinatorService(
     {
         try
         {
-            await Task.Delay(GraceWindow, ct);
+            await Task.Delay(graceWindow, ct);
         }
         catch (OperationCanceledException)
         {

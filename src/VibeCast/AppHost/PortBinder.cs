@@ -1,5 +1,6 @@
 using System.Net;
 using VibeCast.Components;
+using VibeCast.Opml;
 using VibeCast.Playback;
 
 namespace VibeCast.AppHost;
@@ -59,6 +60,7 @@ internal static class PortBinder
         app.UseAntiforgery();
         app.MapStaticAssets();
         app.MapMediaEndpoints();
+        app.MapOpmlEndpoints();
         app.MapRazorComponents<App>()
             .AddInteractiveServerRenderMode();
     }

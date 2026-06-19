@@ -1,0 +1,248 @@
+@page "/settings"
+@rendermode InteractiveServer
+@inject AppConfig Config
+@inject FeedSubscriptionService SubscriptionService
+@implements IDisposable
+@using VibeCast.AppHost
+@using VibeCast.Feeds
+@using VibeCast.Opml
+
+<PageTitle>Settings - VibeCast</PageTitle>
+
+<h1>Settings</h1>
+
+<p><a href="/">&larr; Back to library</a></p>
+
+<section>
+    <h2>General</h2>
+    <p>
+        <label>
+            Preferred port
+            <input type="number" min="1" max="65535" style="width: 6rem;" value="@Config.PreferredPort" @onchange="UpdatePreferredPortAsync" />
+        </label>
+        &mdash; takes effect next launch; this run is on port @LivePort.
+    </p>
+    <p>
+        <label>
+            <input type="checkbox" checked="@Config.TrayEnabled" @onchange="e => SaveBoolAsync(v => Config.TrayEnabled = v, e)" />
+            Show tray icon
+        </label>
+    </p>
+    <p>
+        <label>
+            Shutdown grace window (seconds)
+            <input type="number" min="1" max="600" style="width: 6rem;" value="@Config.GraceWindowSeconds" @onchange="UpdateGraceWindowAsync" />
+        </label>
+        &mdash; how long VibeCast waits with no open tabs before exiting; restarts the wait on reconnect. Takes effect next launch.
+    </p>
+</section>
+
+<section>
+    <h2>Refresh &amp; downloads</h2>
+    <p>
+        <label>
+            <input type="checkbox" checked="@Config.RefreshOnOpen" @onchange="e => SaveBoolAsync(v => Config.RefreshOnOpen = v, e)" />
+            Refresh all feeds automatically when VibeCast opens
+        </label>
+    </p>
+    <p>
+        <label>
+            Concurrent downloads
+            <input type="number" min="1" max="10" style="width: 5rem;" value="@Config.ConcurrentDownloadLimit" @onchange="UpdateConcurrencyAsync" />
+        </label>
+        &mdash; takes effect next launch.
+    </p>
+    <p>
+        <label>
+            Default auto-download cutoff (days)
+            <input type="number" min="0" style="width: 6rem;" value="@Config.DefaultAutoDownloadMaxAgeDays" @onchange="UpdateMaxAgeAsync" />
+        </label>
+        &mdash; applies to newly-added feeds; existing feeds keep their own setting.
+    </p>
+    <p>
+        <label>
+            <input type="checkbox" checked="@Config.DefaultExcludeShorts" @onchange="e => SaveBoolAsync(v => Config.DefaultExcludeShorts = v, e)" />
+            Exclude Shorts by default for new YouTube subscriptions
+        </label>
+    </p>
+</section>
+
+<section>
+    <h2>Retention</h2>
+    <p>
+        <label>
+            Keep last N downloaded files per feed
+            <input type="number" min="0" style="width: 6rem;" value="@Config.DefaultKeepLastCount" @onchange="UpdateKeepLastCountAsync" />
+        </label>
+        &mdash; 0 disables the backstop by default; per-feed overrides on the <a href="/feeds">Feeds</a> page win.
+    </p>
+</section>
+
+<section>
+    <h2>Playback</h2>
+    <p>
+        <label>
+            Default playback speed
+            <input type="number" min="1.0" max="3.0" step="0.1" style="width: 5rem;" value="@Config.DefaultPlaybackSpeed" @onchange="UpdatePlaybackSpeedAsync" />
+        </label>
+        &mdash; RSS uses this exactly; YouTube's embed snaps to its own nearest native step.
+    </p>
+    <p>
+        <label>
+            <input type="checkbox" checked="@Config.AutoMarkOnCompletion" @onchange="e => SaveBoolAsync(v => Config.AutoMarkOnCompletion = v, e)" />
+            Auto-mark episodes as played when playback completes
+        </label>
+    </p>
+</section>
+
+<section>
+    <h2>OPML</h2>
+    <p>Subscription migration only &mdash; round-trips the list of feed URLs, not per-feed settings, played/archive state, or episode history. For a full backup, copy the VibeCast folder.</p>
+    <p><a href="/opml/export">Export OPML</a></p>
+    <p>
+        <InputFile OnChange="HandleOpmlFileSelectedAsync" accept=".opml,.xml" disabled="@isImporting" />
+        @if (isImporting)
+        {
+            <span> importing...</span>
+        }
+    </p>
+    @if (importSummary is not null)
+    {
+        <p>@importSummary</p>
+    }
+</section>
+
+@code {
+    private bool isImporting;
+    private string? importSummary;
+    private readonly CancellationTokenSource cts = new();
+
+    private int? LivePort => RunLock.TryRead();
+
+    private void SaveBoolAsync(Action<bool> setter, ChangeEventArgs e)
+    {
+        setter(e.Value is true);
+        Config.Save();
+    }
+
+    private void UpdatePreferredPortAsync(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value as string, out var port) && port is > 0 and <= 65535)
+        {
+            Config.PreferredPort = port;
+            Config.Save();
+        }
+    }
+
+    private void UpdateGraceWindowAsync(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value as string, out var seconds) && seconds > 0)
+        {
+            Config.GraceWindowSeconds = seconds;
+            Config.Save();
+        }
+    }
+
+    private void UpdateConcurrencyAsync(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value as string, out var limit) && limit > 0)
+        {
+            Config.ConcurrentDownloadLimit = limit;
+            Config.Save();
+        }
+    }
+
+    private void UpdateMaxAgeAsync(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value as string, out var days) && days >= 0)
+        {
+            Config.DefaultAutoDownloadMaxAgeDays = days;
+            Config.Save();
+        }
+    }
+
+    private void UpdateKeepLastCountAsync(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value as string, out var count) && count >= 0)
+        {
+            Config.DefaultKeepLastCount = count;
+            Config.Save();
+        }
+    }
+
+    private void UpdatePlaybackSpeedAsync(ChangeEventArgs e)
+    {
+        if (decimal.TryParse(e.Value as string, out var speed) && speed is >= 1.0m and <= 3.0m)
+        {
+            Config.DefaultPlaybackSpeed = speed;
+            Config.Save();
+        }
+    }
+
+    private async Task HandleOpmlFileSelectedAsync(InputFileChangeEventArgs e)
+    {
+        isImporting = true;
+        importSummary = null;
+        StateHasChanged();
+
+        try
+        {
+            string xml;
+            await using (var stream = e.File.OpenReadStream(maxAllowedSize: 2_000_000))
+            using (var reader = new StreamReader(stream))
+            {
+                xml = await reader.ReadToEndAsync(cts.Token);
+            }
+
+            IReadOnlyList<string> urls;
+            try
+            {
+                urls = OpmlService.ParseFeedUrls(xml);
+            }
+            catch (System.Xml.XmlException)
+            {
+                importSummary = "That file isn't valid OPML/XML.";
+                return;
+            }
+
+            if (urls.Count == 0)
+            {
+                importSummary = "No feed URLs found in that file.";
+                return;
+            }
+
+            var added = 0;
+            var skipped = 0;
+            var failed = 0;
+            foreach (var url in urls)
+            {
+                var result = await SubscriptionService.AddFeedAsync(url, cts.Token);
+                if (result.Success)
+                {
+                    added++;
+                }
+                else if (result.Error?.Contains("already subscribed", StringComparison.OrdinalIgnoreCase) == true)
+                {
+                    skipped++;
+                }
+                else
+                {
+                    failed++;
+                }
+            }
+
+            importSummary = $"Imported {added} new feed(s), skipped {skipped} already-subscribed, {failed} failed.";
+        }
+        finally
+        {
+            isImporting = false;
+            StateHasChanged();
+        }
+    }
+
+    public void Dispose()
+    {
+        cts.Cancel();
+        cts.Dispose();
+    }
+}

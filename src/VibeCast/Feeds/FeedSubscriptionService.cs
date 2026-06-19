@@ -1,5 +1,6 @@
 using System.Xml;
 using Microsoft.EntityFrameworkCore;
+using VibeCast.AppHost;
 using VibeCast.Data;
 using VibeCast.Downloads;
 
@@ -16,7 +17,8 @@ internal sealed class FeedSubscriptionService(
     IDbContextFactory<AppDbContext> dbContextFactory,
     YouTubeChannelResolver youTubeChannelResolver,
     FeedFetcher feedFetcher,
-    DownloadQueue downloadQueue)
+    DownloadQueue downloadQueue,
+    AppConfig config)
 {
     public async Task<AddFeedResult> AddFeedAsync(string inputUrl, CancellationToken ct)
     {
@@ -34,7 +36,7 @@ internal sealed class FeedSubscriptionService(
 
         var youTube = await youTubeChannelResolver.TryResolveAsync(inputUrl, ct);
         var type = youTube is not null ? FeedType.YouTube : FeedType.Rss;
-        var feedUrl = youTube?.ToFeedUrl(excludeShorts: false) ?? uri.ToString();
+        var feedUrl = youTube?.ToFeedUrl(excludeShorts: config.DefaultExcludeShorts) ?? uri.ToString();
 
         await using var db = await dbContextFactory.CreateDbContextAsync(ct);
 
@@ -74,6 +76,8 @@ internal sealed class FeedSubscriptionService(
             Title = title,
             Slug = slug,
             ArtworkUrl = parsed.ArtworkUrl,
+            ExcludeShorts = youTube is not null && config.DefaultExcludeShorts,
+            AutoDownloadMaxAgeDays = config.DefaultAutoDownloadMaxAgeDays,
             DateAddedUtc = DateTime.UtcNow,
             LastRefreshedUtc = DateTime.UtcNow,
         };

@@ -9,10 +9,37 @@ internal sealed class AppConfig
     /// <summary>
     /// When the in-app player reaches the end of an episode, automatically mark it
     /// played (RSS: deletes the file too) instead of requiring a manual click.
-    /// Default off. Global setting -- full settings UI lands in a later phase; this
-    /// is a working toggle in the meantime (see Feeds page).
+    /// Default off.
     /// </summary>
     public bool AutoMarkOnCompletion { get; set; }
+
+    /// <summary>Refresh all feeds automatically each time the app is opened. Default on.</summary>
+    public bool RefreshOnOpen { get; set; } = true;
+
+    /// <summary>Global keep-last-N backstop, overridable per feed (<see cref="VibeCast.Data.Feed.KeepLastCount"/>).</summary>
+    public int DefaultKeepLastCount { get; set; } = 100;
+
+    /// <summary>Global auto-download age cutoff in days, used as the default for newly-added feeds.</summary>
+    public int DefaultAutoDownloadMaxAgeDays { get; set; } = 90;
+
+    /// <summary>Default "exclude Shorts" setting applied when a new YouTube feed is added.</summary>
+    public bool DefaultExcludeShorts { get; set; }
+
+    /// <summary>Starting playback speed for newly-opened episodes (RSS: exact; YouTube: nearest available step).</summary>
+    public decimal DefaultPlaybackSpeed { get; set; } = 1.0m;
+
+    /// <summary>How many enclosures the download worker streams at once.</summary>
+    public int ConcurrentDownloadLimit { get; set; } = 1;
+
+    /// <summary>Show the tray icon (running indicator + Reopen UI + Quit). Default on.</summary>
+    public bool TrayEnabled { get; set; } = true;
+
+    /// <summary>
+    /// Seconds the host waits with zero open circuits before shutting down (see
+    /// <see cref="VibeCast.Shutdown.ShutdownCoordinatorService"/>); survives a quick
+    /// refresh/reconnect blip without staying alive indefinitely.
+    /// </summary>
+    public int GraceWindowSeconds { get; set; } = 20;
 
     public static AppConfig Load()
     {

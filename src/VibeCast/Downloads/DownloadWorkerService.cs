@@ -1,20 +1,31 @@
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using VibeCast.AppHost;
 
 namespace VibeCast.Downloads;
 
 /// <summary>
-/// Single-consumer background worker draining the download queue. Processes one
-/// download at a time -- the per-feed/global concurrency setting (Phase 7) can
-/// raise this later; sequential is the simplest correct Phase 3 baseline.
+/// Background worker(s) draining the download queue. Runs
+/// <see cref="AppConfig.ConcurrentDownloadLimit"/> parallel consumers off the same
+/// channel (multi-consumer is safe -- <see cref="EpisodeDownloader"/> holds no
+/// mutable state and the channel itself permits concurrent readers); read once at
+/// startup, so a change takes effect on next launch.
 /// </summary>
 internal sealed class DownloadWorkerService(
     DownloadQueue queue,
     DownloadCancellationRegistry cancellationRegistry,
     EpisodeDownloader downloader,
+    AppConfig config,
     ILogger<DownloadWorkerService> logger) : BackgroundService
 {
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    protected override Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        var workerCount = Math.Max(1, config.ConcurrentDownloadLimit);
+        var workers = Enumerable.Range(0, workerCount).Select(_ => RunWorkerAsync(stoppingToken));
+        return Task.WhenAll(workers);
+    }
+
+    private async Task RunWorkerAsync(CancellationToken stoppingToken)
     {
         await foreach (var request in queue.ReadAllAsync(stoppingToken))
         {
