@@ -11,14 +11,14 @@ using VibeCast.Data;
 namespace VibeCast.Data.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260619011044_AddDownloadColumns")]
-    partial class AddDownloadColumns
+    [Migration("20260619165528_InitialCreate")]
+    partial class InitialCreate
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder.HasAnnotation("ProductVersion", "10.0.0");
+            modelBuilder.HasAnnotation("ProductVersion", "10.0.9");
 
             modelBuilder.Entity("VibeCast.Data.Episode", b =>
                 {
@@ -108,6 +108,12 @@ namespace VibeCast.Data.Migrations
 
                     b.Property<string>("FeedUrl")
                         .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("KeepLastCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("LastRefreshError")
                         .HasColumnType("TEXT");
 
                     b.Property<DateTime?>("LastRefreshedUtc")

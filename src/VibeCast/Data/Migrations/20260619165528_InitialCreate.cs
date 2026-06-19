@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace VibeCast.Data.Migrations
 {
     /// <inheritdoc />
-    public partial class AddFeedsAndEpisodes : Migration
+    public partial class InitialCreate : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -24,8 +24,12 @@ namespace VibeCast.Data.Migrations
                     Slug = table.Column<string>(type: "TEXT", nullable: false),
                     ArtworkUrl = table.Column<string>(type: "TEXT", nullable: true),
                     ExcludeShorts = table.Column<bool>(type: "INTEGER", nullable: false),
-                    DateAddedUtc = table.Column<DateTimeOffset>(type: "TEXT", nullable: false),
-                    LastRefreshedUtc = table.Column<DateTimeOffset>(type: "TEXT", nullable: true)
+                    AutoDownloadEnabled = table.Column<bool>(type: "INTEGER", nullable: false, defaultValue: true),
+                    AutoDownloadMaxAgeDays = table.Column<int>(type: "INTEGER", nullable: true, defaultValue: 90),
+                    KeepLastCount = table.Column<int>(type: "INTEGER", nullable: true),
+                    DateAddedUtc = table.Column<DateTime>(type: "TEXT", nullable: false),
+                    LastRefreshedUtc = table.Column<DateTime>(type: "TEXT", nullable: true),
+                    LastRefreshError = table.Column<string>(type: "TEXT", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -41,7 +45,7 @@ namespace VibeCast.Data.Migrations
                     FeedId = table.Column<int>(type: "INTEGER", nullable: false),
                     DedupKey = table.Column<string>(type: "TEXT", nullable: false),
                     Title = table.Column<string>(type: "TEXT", nullable: false),
-                    PublishedAtUtc = table.Column<DateTimeOffset>(type: "TEXT", nullable: false),
+                    PublishedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false),
                     DescriptionHtml = table.Column<string>(type: "TEXT", nullable: true),
                     ArtworkUrl = table.Column<string>(type: "TEXT", nullable: true),
                     DurationSeconds = table.Column<int>(type: "INTEGER", nullable: true),
@@ -51,6 +55,7 @@ namespace VibeCast.Data.Migrations
                     IsPlayed = table.Column<bool>(type: "INTEGER", nullable: false),
                     IsArchived = table.Column<bool>(type: "INTEGER", nullable: false),
                     IsDownloaded = table.Column<bool>(type: "INTEGER", nullable: false),
+                    DownloadedFileName = table.Column<string>(type: "TEXT", nullable: true),
                     PlaybackPositionSeconds = table.Column<int>(type: "INTEGER", nullable: false)
                 },
                 constraints: table =>

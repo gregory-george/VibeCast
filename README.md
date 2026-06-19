@@ -68,4 +68,4 @@ aren't embedded into the single file). Copy that whole output folder to ship —
 the "folder is the entire app" unit described above, just without `config.json`/
 `podcasts.db`/etc. yet, since those are created on first run.
 
-Windows x64 only; no arm64 build.
+Windows x64 only
