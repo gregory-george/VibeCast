@@ -78,6 +78,12 @@ internal sealed class AppConfig
     /// </summary>
     public bool HideEmptyFeeds { get; set; }
 
+    /// <summary>
+    /// UI color theme: "Light", "Dark", or "System" (follows the OS via
+    /// <c>prefers-color-scheme</c>). Default "System".
+    /// </summary>
+    public string Theme { get; set; } = "System";
+
     public static AppConfig Load()
     {
         if (!File.Exists(AppPaths.ConfigFile))

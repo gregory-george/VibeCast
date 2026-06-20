@@ -2,7 +2,9 @@
 @rendermode InteractiveServer
 @inject AppConfig Config
 @inject FeedSubscriptionService SubscriptionService
+@inject IJSRuntime JS
 @implements IDisposable
+@implements IAsyncDisposable
 @using VibeCast.AppHost
 @using VibeCast.Feeds
 @using VibeCast.Opml
@@ -36,6 +38,16 @@
             <input type="number" min="1" max="600" style="width: 6rem;" value="@Config.GraceWindowSeconds" @onchange="UpdateGraceWindowAsync" />
         </label>
         &mdash; how long VibeCast waits with no open tabs before exiting; restarts the wait on reconnect. Takes effect next launch.
+    </p>
+    <p>
+        <label>
+            Theme
+            <select value="@Config.Theme" @onchange="UpdateThemeAsync">
+                <option value="System">System default</option>
+                <option value="Light">Light</option>
+                <option value="Dark">Dark</option>
+            </select>
+        </label>
     </p>
 </section>
 
@@ -134,6 +146,7 @@
     private bool isImporting;
     private string? importSummary;
     private readonly CancellationTokenSource cts = new();
+    private IJSObjectReference? themeModule;
 
     private int? LivePort => RunLock.TryRead();
 
@@ -159,6 +172,20 @@
             Config.GraceWindowSeconds = seconds;
             Config.Save();
         }
+    }
+
+    private async Task UpdateThemeAsync(ChangeEventArgs e)
+    {
+        if (e.Value is not string theme || theme is not ("System" or "Light" or "Dark"))
+        {
+            return;
+        }
+
+        Config.Theme = theme;
+        Config.Save();
+
+        themeModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/theme.js");
+        await themeModule.InvokeVoidAsync("setTheme", theme);
     }
 
     private void UpdateConcurrencyAsync(ChangeEventArgs e)
@@ -271,5 +298,13 @@
     {
         cts.Cancel();
         cts.Dispose();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (themeModule is not null)
+        {
+            await themeModule.DisposeAsync();
+        }
     }
 }

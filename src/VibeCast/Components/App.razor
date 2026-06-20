@@ -1,5 +1,7 @@
-﻿<!DOCTYPE html>
-<html lang="en">
+﻿@inject VibeCast.AppHost.AppConfig Config
+
+<!DOCTYPE html>
+<html lang="en" data-theme="@(Config.Theme == "System" ? null : Config.Theme.ToLowerInvariant())">
 
 <head>
     <meta charset="utf-8" />

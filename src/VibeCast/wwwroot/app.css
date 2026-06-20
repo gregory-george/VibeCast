@@ -66,6 +66,52 @@
     }
 }
 
+/* Explicit theme override (Settings > Theme), takes precedence over the OS
+   preference above regardless of source order -- higher specificity. */
+:root[data-theme="dark"] {
+    --vc-bg: #0c1a33;
+    --vc-surface: #14213f;
+    --vc-surface-2: #1b2b52;
+    --vc-border: #25365e;
+    --vc-border-strong: #33487a;
+    --vc-text: #eaf1fb;
+    --vc-text-muted: #9db1cf;
+    --vc-text-faint: #6f83a3;
+
+    --vc-accent: #3d8bf7;
+    --vc-accent-strong: #5ba0ff;
+    --vc-accent-bright: #46c8ff;
+    --vc-accent-soft: rgba(61, 139, 247, 0.18);
+    --vc-on-accent: #ffffff;
+    --vc-focus-glow: rgba(70, 200, 255, 0.45);
+
+    --vc-success: #44c06b;
+    --vc-warning: #e8a93a;
+    --vc-danger: #e2554e;
+}
+
+:root[data-theme="light"] {
+    --vc-bg: #f4f8fd;
+    --vc-surface: #ffffff;
+    --vc-surface-2: #eaf2fc;
+    --vc-border: #dbe6f3;
+    --vc-border-strong: #c2d4ea;
+    --vc-text: #132238;
+    --vc-text-muted: #5c6f8a;
+    --vc-text-faint: #8497ad;
+
+    --vc-accent: #1f6fe5;
+    --vc-accent-strong: #1559c0;
+    --vc-accent-bright: #1397d6;
+    --vc-accent-soft: #e6f0ff;
+    --vc-on-accent: #ffffff;
+    --vc-focus-glow: rgba(31, 111, 229, 0.30);
+
+    --vc-success: #2f9e54;
+    --vc-warning: #d98a16;
+    --vc-danger: #d6463f;
+}
+
 html, body {
     margin: 0;
     background: var(--vc-bg);
