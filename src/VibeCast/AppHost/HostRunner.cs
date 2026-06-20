@@ -77,7 +77,12 @@ internal static class HostRunner
         trayContext.CancellationRegistry = app.Services.GetRequiredService<DownloadCancellationRegistry>();
         if (config.TrayEnabled)
         {
-            trayContext.ShowTrayIcon(port);
+            // NotifyIcon creates its native window the first time Visible is set, and
+            // that window needs to belong to the WinForms STA/message-loop thread, not
+            // this background host thread -- otherwise the icon silently never shows or
+            // never responds to clicks (NotifyIcon is a Component, not a Control, so
+            // there's no InvokeRequired guard to catch the mistake).
+            uiSyncContext.Post(_ => trayContext.ShowTrayIcon(port), null);
         }
 
         if (isFirstRun)

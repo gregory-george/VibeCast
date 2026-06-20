@@ -10,7 +10,11 @@ namespace VibeCast.AppHost;
 /// </summary>
 internal sealed class TrayApplicationContext : ApplicationContext
 {
+    /// <summary>How long Quit waits for graceful shutdown before forcing the process down.</summary>
+    private const int ForceQuitTimeoutSeconds = 10;
+
     private readonly NotifyIcon notifyIcon;
+    private CancellationTokenSource? forceQuitWatchdog;
 
     public TrayApplicationContext()
     {
@@ -79,6 +83,12 @@ internal sealed class TrayApplicationContext : ApplicationContext
 
     private void Quit()
     {
+        if (forceQuitWatchdog is not null)
+        {
+            // Already quitting (e.g. double-clicked Quit) -- let the in-flight attempt run.
+            return;
+        }
+
         if (DownloadTracker is { HasActiveDownloads: true })
         {
             var result = MessageBox.Show(
@@ -96,7 +106,51 @@ internal sealed class TrayApplicationContext : ApplicationContext
             CancelActiveDownloads();
         }
 
-        HostLifetime?.StopApplication();
+        if (HostLifetime is null)
+        {
+            // Host never started (or already failed) -- nothing to shut down gracefully.
+            ForceQuit();
+            return;
+        }
+
+        HostLifetime.StopApplication();
+        ArmForceQuitWatchdog();
+    }
+
+    /// <summary>
+    /// Backstop for "finish, then exit" (CLAUDE.md): if graceful shutdown hangs -- a
+    /// hosted service overrunning, a stuck HTTP read, a blocked WAL checkpoint -- the user
+    /// asked to Quit and the process must actually go away. Cancelled by ExitThreadCore
+    /// once the normal shutdown path completes, so this never fires on the happy path.
+    /// </summary>
+    private void ArmForceQuitWatchdog()
+    {
+        var cts = new CancellationTokenSource();
+        forceQuitWatchdog = cts;
+
+        _ = Task.Delay(TimeSpan.FromSeconds(ForceQuitTimeoutSeconds), cts.Token).ContinueWith(
+            t =>
+            {
+                if (!t.IsCanceled)
+                {
+                    ForceQuit();
+                }
+            },
+            CancellationToken.None,
+            TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.FromCurrentSynchronizationContext());
+    }
+
+    /// <summary>
+    /// Hard close: skips the WAL checkpoint and leaves a stale run.lock, both of which are
+    /// already safe by design -- SQLite WAL recovers on next open, and the launcher already
+    /// treats run.lock as potentially stale and validates the port before reuse.
+    /// </summary>
+    private void ForceQuit()
+    {
+        notifyIcon.Visible = false;
+        notifyIcon.Dispose();
+        Environment.Exit(0);
     }
 
     private void CancelActiveDownloads()
@@ -117,6 +171,9 @@ internal sealed class TrayApplicationContext : ApplicationContext
 
     protected override void ExitThreadCore()
     {
+        // Graceful shutdown completed -- disarm the force-quit fallback.
+        forceQuitWatchdog?.Cancel();
+
         // Hide immediately so no ghost icon lingers in the tray after exit.
         notifyIcon.Visible = false;
         notifyIcon.Dispose();
