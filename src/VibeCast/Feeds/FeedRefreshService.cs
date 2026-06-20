@@ -19,6 +19,7 @@ internal sealed class FeedRefreshService(
     RetentionService retentionService,
     FeedArtworkService artworkService,
     YouTubeChannelResolver youTubeChannelResolver,
+    YouTubeDurationService youTubeDurationService,
     ILogger<FeedRefreshService> logger)
 {
     public async Task RefreshAllAsync(CancellationToken ct)
@@ -99,6 +100,13 @@ internal sealed class FeedRefreshService(
         await db.SaveChangesAsync(ct);
 
         await artworkService.EnsureArtworkAsync(feed.Id, ct);
+
+        if (feed.Type == FeedType.YouTube && newEpisodes.Count > 0)
+        {
+            // videos.xml carries no duration; backfill only the newly-added
+            // episodes by scraping each watch page (best-effort, never throws).
+            await youTubeDurationService.BackfillAsync(newEpisodes, ct);
+        }
 
         var feedTitle = feed.Title ?? feed.OriginalUrl;
         foreach (var episode in newEpisodes)
