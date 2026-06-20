@@ -1,3 +1,4 @@
+using System.Reflection;
 using VibeCast.Downloads;
 
 namespace VibeCast.AppHost;
@@ -20,7 +21,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
     {
         notifyIcon = new NotifyIcon
         {
-            Icon = SystemIcons.Application,
+            Icon = LoadAppIcon(),
             Text = "VibeCast (starting...)",
             Visible = false,
         };
@@ -31,6 +32,17 @@ internal sealed class TrayApplicationContext : ApplicationContext
         menu.Items.Add("Quit", null, (_, _) => Quit());
         notifyIcon.ContextMenuStrip = menu;
         notifyIcon.DoubleClick += (_, _) => ReopenUi();
+    }
+
+    /// <summary>
+    /// Loads the app's icon from the embedded resource baked into the exe at build time
+    /// (see VibeCast.csproj), falling back to the stock icon if it's ever missing.
+    /// </summary>
+    private static Icon LoadAppIcon()
+    {
+        using var stream = typeof(TrayApplicationContext).Assembly
+            .GetManifestResourceStream("VibeCast.Resources.app.ico");
+        return stream is not null ? new Icon(stream) : SystemIcons.Application;
     }
 
     /// <summary>
