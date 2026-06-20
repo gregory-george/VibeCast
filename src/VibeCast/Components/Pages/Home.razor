@@ -6,6 +6,7 @@
 @inject DownloadQueue DownloadQueue
 @inject DownloadProgressTracker ProgressTracker
 @inject PlaybackService PlaybackService
+@inject AppConfig Config
 @using Microsoft.EntityFrameworkCore
 @using VibeCast.AppHost
 @using VibeCast.Data
@@ -24,9 +25,15 @@
                     All feeds
                 </button>
             </li>
+            <li class="feed-filter">
+                <label>
+                    <input type="checkbox" checked="@Config.HideEmptyFeeds" @onchange="ToggleHideEmptyFeedsAsync" />
+                    Hide feeds with no unplayed episodes
+                </label>
+            </li>
             @if (feeds is not null)
             {
-                @foreach (var feed in feeds)
+                @foreach (var feed in feeds.Where(f => !Config.HideEmptyFeeds || f.ActiveCount > 0))
                 {
                     <li>
                         <button class="@(selectedFeedId == feed.Id ? "selected" : null)" @onclick="() => SelectFeedAsync(feed.Id)">
@@ -194,6 +201,18 @@
         await LoadEpisodesAsync();
     }
 
+    private async Task ToggleHideEmptyFeedsAsync(ChangeEventArgs e)
+    {
+        Config.HideEmptyFeeds = e.Value is true;
+        Config.Save();
+
+        if (Config.HideEmptyFeeds && selectedFeedId is { } feedId
+            && feeds?.SingleOrDefault(f => f.Id == feedId) is { ActiveCount: 0 })
+        {
+            await SelectFeedAsync(null);
+        }
+    }
+
     private async Task ToggleShowArchivedAsync(ChangeEventArgs e)
     {
         showArchived = e.Value is true;
@@ -290,6 +309,14 @@
     private async Task RefreshAfterMutationAsync(int episodeId)
     {
         await LoadFeedsAsync();
+
+        if (Config.HideEmptyFeeds && selectedFeedId is { } feedId
+            && feeds?.SingleOrDefault(f => f.Id == feedId) is { ActiveCount: 0 })
+        {
+            await SelectFeedAsync(null);
+            return;
+        }
+
         await LoadEpisodesAsync();
 
         if (selectedEpisodeId == episodeId)

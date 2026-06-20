@@ -72,6 +72,12 @@ internal sealed class AppConfig
     /// </summary>
     public int VideoPlayerHeightPx { get; set; } = 150;
 
+    /// <summary>
+    /// Hide feeds with zero active (non-archived) episodes from the sidebar feed list
+    /// on the library page (see <see cref="VibeCast.Components.Pages.Home"/>). Default off.
+    /// </summary>
+    public bool HideEmptyFeeds { get; set; }
+
     public static AppConfig Load()
     {
         if (!File.Exists(AppPaths.ConfigFile))
