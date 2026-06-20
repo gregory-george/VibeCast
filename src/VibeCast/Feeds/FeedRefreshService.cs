@@ -62,7 +62,7 @@ internal sealed class FeedRefreshService(
             feed.Title = parsed.Title;
         }
 
-        if (feed.ArtworkUrl is null && parsed.ArtworkUrl is not null)
+        if (parsed.ArtworkUrl is not null && parsed.ArtworkUrl != feed.ArtworkUrl)
         {
             feed.ArtworkUrl = parsed.ArtworkUrl;
         }

@@ -10,8 +10,8 @@ namespace VibeCast.Feeds;
 /// it survives offline and doesn't depend on a third-party host staying reachable
 /// (CLAUDE.md: portability, no phone-home beyond explicit refresh). Never throws --
 /// a failed or missing artwork fetch must not block adding or refreshing a feed.
-/// Skips entirely once a file is already on disk; doesn't re-check for art URL
-/// changes after the first successful fetch.
+/// Skips the network round-trip once a file is on disk for the feed's current
+/// ArtworkUrl; re-downloads when ArtworkUrl has changed since the last fetch.
 /// </summary>
 internal sealed class FeedArtworkService(
     HttpClient httpClient,
@@ -42,7 +42,7 @@ internal sealed class FeedArtworkService(
             return;
         }
 
-        if (feed.ArtworkFileName is not null)
+        if (feed.ArtworkFileName is not null && feed.ArtworkDownloadedUrl == feed.ArtworkUrl)
         {
             var existingPath = Path.Combine(AppPaths.DownloadsDirectory, feed.Slug, feed.ArtworkFileName);
             if (File.Exists(existingPath))
@@ -92,6 +92,7 @@ internal sealed class FeedArtworkService(
         }
 
         feed.ArtworkFileName = fileName;
+        feed.ArtworkDownloadedUrl = feed.ArtworkUrl;
         await db.SaveChangesAsync(ct);
     }
 

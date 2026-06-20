@@ -28,6 +28,14 @@ internal sealed class Feed
     /// </summary>
     public string? ArtworkFileName { get; set; }
 
+    /// <summary>
+    /// The <see cref="ArtworkUrl"/> value that produced the currently downloaded
+    /// <see cref="ArtworkFileName"/>. Compared against the live <see cref="ArtworkUrl"/>
+    /// on each refresh so <see cref="VibeCast.Feeds.FeedArtworkService"/> knows to
+    /// re-download when the feed's cover art URL changes.
+    /// </summary>
+    public string? ArtworkDownloadedUrl { get; set; }
+
     /// <summary>YouTube only: swaps the feed URL to the UULF long-form playlist (excludes Shorts).</summary>
     public bool ExcludeShorts { get; set; }
 
