@@ -71,6 +71,57 @@ internal sealed partial class YouTubeChannelResolver(HttpClient httpClient)
         return canonicalMatch.Success ? canonicalMatch.Groups["id"].Value : null;
     }
 
+    /// <summary>
+    /// YouTube's videos.xml carries no channel-level artwork (only per-video
+    /// thumbnails), so the channel avatar is scraped separately from the channel
+    /// page's og:image meta tag. Best-effort: returns null on any failure.
+    /// </summary>
+    public async Task<string?> TryGetChannelAvatarUrlAsync(YouTubeChannelResolution resolution, CancellationToken ct)
+    {
+        var channelId = resolution.ChannelId ?? ExtractChannelIdFromFeedUrl(resolution.RawFeedUrl);
+        if (channelId is null)
+        {
+            return null;
+        }
+
+        string html;
+        try
+        {
+            html = await httpClient.GetStringAsync($"https://www.youtube.com/channel/{channelId}", ct);
+        }
+        catch (HttpRequestException)
+        {
+            return null;
+        }
+
+        var match = OgImagePattern().Match(html);
+        return match.Success ? match.Groups["url"].Value : null;
+    }
+
+    private static string? ExtractChannelIdFromFeedUrl(string? feedUrl)
+    {
+        if (feedUrl is null || !Uri.TryCreate(feedUrl, UriKind.Absolute, out var uri))
+        {
+            return null;
+        }
+
+        var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
+        var channelId = query["channel_id"];
+        if (channelId is not null)
+        {
+            return channelId;
+        }
+
+        var playlistId = query["playlist_id"];
+        if (playlistId is not null && playlistId.StartsWith("UULF", StringComparison.Ordinal))
+        {
+            // UULF -> UC prefix swap reverses the long-form-only playlist ID back to the channel ID.
+            return "UC" + playlistId[4..];
+        }
+
+        return null;
+    }
+
     [GeneratedRegex("^UC[A-Za-z0-9_-]{20,}$")]
     private static partial Regex RawChannelIdPattern();
 
@@ -82,4 +133,7 @@ internal sealed partial class YouTubeChannelResolver(HttpClient httpClient)
 
     [GeneratedRegex("<link\\s+rel=\"canonical\"\\s+href=\"https://www\\.youtube\\.com/channel/(?<id>UC[A-Za-z0-9_-]{10,})\"")]
     private static partial Regex CanonicalChannelIdPattern();
+
+    [GeneratedRegex("<meta\\s+property=\"og:image\"\\s+content=\"(?<url>[^\"]+)\"")]
+    private static partial Regex OgImagePattern();
 }

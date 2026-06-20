@@ -18,6 +18,7 @@ internal sealed class FeedRefreshService(
     DownloadQueue downloadQueue,
     RetentionService retentionService,
     FeedArtworkService artworkService,
+    YouTubeChannelResolver youTubeChannelResolver,
     ILogger<FeedRefreshService> logger)
 {
     public async Task RefreshAllAsync(CancellationToken ct)
@@ -65,6 +66,13 @@ internal sealed class FeedRefreshService(
         if (parsed.ArtworkUrl is not null && parsed.ArtworkUrl != feed.ArtworkUrl)
         {
             feed.ArtworkUrl = parsed.ArtworkUrl;
+        }
+        else if (feed.Type == FeedType.YouTube && feed.ArtworkUrl is null)
+        {
+            // Backfill for feeds subscribed before channel-avatar scraping existed.
+            // videos.xml never carries artwork itself, so this is the only path that sets it.
+            feed.ArtworkUrl = await youTubeChannelResolver.TryGetChannelAvatarUrlAsync(
+                YouTubeChannelResolution.FromRawFeedUrl(feed.FeedUrl), ct);
         }
 
         var existingKeys = await db.Episodes
