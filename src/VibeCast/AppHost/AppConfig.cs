@@ -54,7 +54,7 @@ internal sealed class AppConfig
     /// <see cref="VibeCast.Shutdown.ShutdownCoordinatorService"/>); survives a quick
     /// refresh/reconnect blip without staying alive indefinitely.
     /// </summary>
-    public int GraceWindowSeconds { get; set; } = 20;
+    public int GraceWindowSeconds { get; set; } = 10;
 
     /// <summary>
     /// True once the first-run "create a desktop shortcut?" prompt has been shown
