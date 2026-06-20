@@ -18,6 +18,7 @@ internal sealed class FeedSubscriptionService(
     YouTubeChannelResolver youTubeChannelResolver,
     FeedFetcher feedFetcher,
     DownloadQueue downloadQueue,
+    FeedArtworkService artworkService,
     AppConfig config)
 {
     public async Task<AddFeedResult> AddFeedAsync(string inputUrl, CancellationToken ct)
@@ -106,6 +107,8 @@ internal sealed class FeedSubscriptionService(
 
         db.Feeds.Add(feed);
         await db.SaveChangesAsync(ct);
+
+        await artworkService.EnsureArtworkAsync(feed.Id, ct);
 
         var feedTitle = feed.Title ?? feed.OriginalUrl;
         foreach (var episode in feed.Episodes)

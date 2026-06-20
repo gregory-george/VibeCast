@@ -9,8 +9,14 @@
 {
     <div class="now-playing @(isExpanded ? "now-playing-expanded" : "")">
         <div class="now-playing-info">
-            <div class="now-playing-title">@current.Title</div>
-            <div class="now-playing-feed">@current.FeedTitle</div>
+            @if (current.ArtworkUrl is not null && !isExpanded)
+            {
+                <img class="now-playing-art" src="@current.ArtworkUrl" alt="" />
+            }
+            <div class="now-playing-text">
+                <div class="now-playing-title">@current.Title</div>
+                <div class="now-playing-feed">@current.FeedTitle</div>
+            </div>
         </div>
 
         <div class="now-playing-media">

@@ -17,6 +17,7 @@ internal sealed class FeedRefreshService(
     FeedFetcher feedFetcher,
     DownloadQueue downloadQueue,
     RetentionService retentionService,
+    FeedArtworkService artworkService,
     ILogger<FeedRefreshService> logger)
 {
     public async Task RefreshAllAsync(CancellationToken ct)
@@ -88,6 +89,8 @@ internal sealed class FeedRefreshService(
         feed.LastRefreshedUtc = DateTime.UtcNow;
         feed.LastRefreshError = null;
         await db.SaveChangesAsync(ct);
+
+        await artworkService.EnsureArtworkAsync(feed.Id, ct);
 
         var feedTitle = feed.Title ?? feed.OriginalUrl;
         foreach (var episode in newEpisodes)

@@ -46,6 +46,7 @@ else
     <table>
         <thead>
             <tr>
+                <th></th>
                 <th>Title</th>
                 <th>Type</th>
                 <th>Slug</th>
@@ -60,6 +61,12 @@ else
             @foreach (var feed in feeds)
             {
                 <tr>
+                    <td>
+                        @if (feed.HasArtwork)
+                        {
+                            <img src="/media/feeds/@(feed.Id)/artwork" alt="" style="width: 2rem; height: 2rem; border-radius: 4px; object-fit: cover; vertical-align: middle;" />
+                        }
+                    </td>
                     <td>@feed.Title</td>
                     <td>@feed.Type</td>
                     <td>@feed.Slug</td>
@@ -108,7 +115,7 @@ else
         await using var db = await DbContextFactory.CreateDbContextAsync(cts.Token);
         feeds = await db.Feeds
             .OrderBy(f => f.Title)
-            .Select(f => new FeedRow(f.Id, f.Title ?? f.OriginalUrl, f.Type, f.Slug, f.Episodes.Count, f.LastRefreshedUtc, f.AutoDownloadEnabled, f.KeepLastCount, f.LastRefreshError))
+            .Select(f => new FeedRow(f.Id, f.Title ?? f.OriginalUrl, f.Type, f.Slug, f.Episodes.Count, f.LastRefreshedUtc, f.AutoDownloadEnabled, f.KeepLastCount, f.LastRefreshError, f.ArtworkFileName != null))
             .ToListAsync(cts.Token);
     }
 
@@ -201,5 +208,5 @@ else
         cts.Dispose();
     }
 
-    private sealed record FeedRow(int Id, string Title, FeedType Type, string Slug, int EpisodeCount, DateTime? LastRefreshedUtc, bool AutoDownloadEnabled, int? KeepLastCount, string? LastRefreshError);
+    private sealed record FeedRow(int Id, string Title, FeedType Type, string Slug, int EpisodeCount, DateTime? LastRefreshedUtc, bool AutoDownloadEnabled, int? KeepLastCount, string? LastRefreshError, bool HasArtwork);
 }

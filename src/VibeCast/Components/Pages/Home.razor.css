@@ -44,6 +44,24 @@
         color: #888;
     }
 
+    .feed-sidebar .feed-name {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .feed-sidebar .feed-art {
+        width: 1.2rem;
+        height: 1.2rem;
+        flex-shrink: 0;
+        border-radius: 3px;
+        object-fit: cover;
+    }
+
 .episode-list {
     width: 360px;
     flex-shrink: 0;

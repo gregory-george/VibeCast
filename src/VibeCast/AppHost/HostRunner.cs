@@ -160,6 +160,7 @@ internal static class HostRunner
         builder.Services.AddHttpClient<FeedFetcher>(ConfigureHttpClient);
         builder.Services.AddHttpClient<YouTubeChannelResolver>(ConfigureHttpClient);
         builder.Services.AddHttpClient<EpisodeDownloader>(ConfigureHttpClient);
+        builder.Services.AddHttpClient<FeedArtworkService>(ConfigureHttpClient);
 
         builder.Services.AddScoped<FeedSubscriptionService>();
         builder.Services.AddScoped<FeedRefreshService>();

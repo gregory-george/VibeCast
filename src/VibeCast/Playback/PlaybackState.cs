@@ -17,4 +17,5 @@ internal sealed record PlaybackState(
     string? YouTubeVideoId,
     string ExternalTarget,
     int InitialPositionSeconds,
-    bool IsVideo);
+    bool IsVideo,
+    string? ArtworkUrl);

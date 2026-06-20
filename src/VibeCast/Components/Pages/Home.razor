@@ -30,7 +30,14 @@
                 {
                     <li>
                         <button class="@(selectedFeedId == feed.Id ? "selected" : null)" @onclick="() => SelectFeedAsync(feed.Id)">
-                            @feed.Title <span class="count">@feed.ActiveCount</span>
+                            <span class="feed-name">
+                                @if (feed.HasArtwork)
+                                {
+                                    <img class="feed-art" src="/media/feeds/@(feed.Id)/artwork" alt="" />
+                                }
+                                @feed.Title
+                            </span>
+                            <span class="count">@feed.ActiveCount</span>
                         </button>
                     </li>
                 }
@@ -145,7 +152,7 @@
         await using var db = await DbContextFactory.CreateDbContextAsync(cts.Token);
         feeds = await db.Feeds
             .OrderBy(f => f.Title)
-            .Select(f => new FeedSummary(f.Id, f.Title ?? f.OriginalUrl, f.Episodes.Count(e => !e.IsArchived)))
+            .Select(f => new FeedSummary(f.Id, f.Title ?? f.OriginalUrl, f.Episodes.Count(e => !e.IsArchived), f.ArtworkFileName != null))
             .ToListAsync(cts.Token);
     }
 
@@ -340,7 +347,7 @@
         cts.Dispose();
     }
 
-    private sealed record FeedSummary(int Id, string Title, int ActiveCount);
+    private sealed record FeedSummary(int Id, string Title, int ActiveCount, bool HasArtwork);
 
     private sealed record EpisodeListItem(int Id, string Title, string FeedTitle, DateTime PublishedAtUtc, int? DurationSeconds, long? FileSizeBytes);
 

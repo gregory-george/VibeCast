@@ -86,7 +86,8 @@ internal sealed class PlaybackService : IDisposable
             YouTubeVideoId: episode.YouTubeVideoId,
             ExternalTarget: $"https://www.youtube.com/watch?v={episode.YouTubeVideoId}",
             InitialPositionSeconds: episode.PlaybackPositionSeconds,
-            IsVideo: true));
+            IsVideo: true,
+            ArtworkUrl: BuildArtworkUrl(episode.Feed)));
     }
 
     public Task SavePositionAsync(int episodeId, int positionSeconds, CancellationToken ct) =>
@@ -136,8 +137,12 @@ internal sealed class PlaybackService : IDisposable
             YouTubeVideoId: null,
             ExternalTarget: filePath,
             InitialPositionSeconds: episode.PlaybackPositionSeconds,
-            IsVideo: episode.EnclosureMediaType is { } mediaType && mediaType.StartsWith("video/", StringComparison.OrdinalIgnoreCase));
+            IsVideo: episode.EnclosureMediaType is { } mediaType && mediaType.StartsWith("video/", StringComparison.OrdinalIgnoreCase),
+            ArtworkUrl: BuildArtworkUrl(episode.Feed));
     }
+
+    private static string? BuildArtworkUrl(Feed feed) =>
+        feed.ArtworkFileName is null ? null : $"/media/feeds/{feed.Id}/artwork";
 
     private void OnDownloadProgressChanged()
     {

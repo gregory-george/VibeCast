@@ -22,6 +22,12 @@ internal sealed class Feed
 
     public string? ArtworkUrl { get; set; }
 
+    /// <summary>
+    /// Filename of the downloaded artwork under downloads/&lt;slug&gt;/, e.g. "cover.jpg".
+    /// Null until <see cref="VibeCast.Feeds.FeedArtworkService"/> successfully fetches it.
+    /// </summary>
+    public string? ArtworkFileName { get; set; }
+
     /// <summary>YouTube only: swaps the feed URL to the UULF long-form playlist (excludes Shorts).</summary>
     public bool ExcludeShorts { get; set; }
 
