@@ -168,6 +168,20 @@
     font-size: 0.82rem;
 }
 
+.shorts-badge {
+    display: inline-block;
+    margin-left: 0.4rem;
+    padding: 0.05rem 0.4rem;
+    border-radius: 999px;
+    background: var(--vc-accent-soft);
+    color: var(--vc-accent-strong);
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    vertical-align: middle;
+}
+
 .episode-detail {
     flex-grow: 1;
     overflow-y: auto;

@@ -81,7 +81,13 @@
                 @foreach (var episode in episodes)
                 {
                     <li class="@(selectedEpisodeId == episode.Id ? "selected" : null)" @onclick="() => SelectEpisodeAsync(episode.Id)">
-                        <div class="episode-title">@episode.Title</div>
+                        <div class="episode-title">
+                            @episode.Title
+                            @if (episode.IsShort)
+                            {
+                                <span class="shorts-badge" title="YouTube Short">Short</span>
+                            }
+                        </div>
                         <div class="episode-meta">
                             @episode.FeedTitle &middot; @episode.PublishedAtUtc.ToLocalTime().ToString("MMM d, yyyy") &middot; @FormatDuration(episode.DurationSeconds) &middot; @FormatFileSize(episode.FileSizeBytes)
                         </div>
@@ -98,7 +104,13 @@
         }
         else
         {
-            <h2>@detail.Title</h2>
+            <h2>
+                @detail.Title
+                @if (detail.IsShort)
+                {
+                    <span class="shorts-badge" title="YouTube Short">Short</span>
+                }
+            </h2>
             <p class="episode-meta">
                 @detail.FeedTitle &middot; @detail.PublishedAtUtc.ToLocalTime().ToString("MMM d, yyyy") &middot; @FormatDuration(detail.DurationSeconds) &middot; @FormatFileSize(detail.FileSizeBytes)
             </p>
@@ -188,6 +200,7 @@
                 FeedTitle = e.Feed.Title ?? e.Feed.OriginalUrl,
                 e.PublishedAtUtc,
                 e.DurationSeconds,
+                IsShort = e.EnclosureUrl == null && e.DurationSeconds != null && e.DurationSeconds <= 60,
                 FeedSlug = e.Feed.Slug,
                 e.DownloadedFileName,
             })
@@ -195,7 +208,7 @@
             .ToListAsync(cts.Token);
 
         episodes = rows
-            .Select(r => new EpisodeListItem(r.Id, r.Title, r.FeedTitle, r.PublishedAtUtc, r.DurationSeconds, GetFileSize(r.FeedSlug, r.DownloadedFileName)))
+            .Select(r => new EpisodeListItem(r.Id, r.Title, r.FeedTitle, r.PublishedAtUtc, r.DurationSeconds, r.IsShort, GetFileSize(r.FeedSlug, r.DownloadedFileName)))
             .ToList();
     }
 
@@ -252,6 +265,7 @@
                 e.IsPlayed,
                 e.IsArchived,
                 IsRss = e.EnclosureUrl != null,
+                IsShort = e.EnclosureUrl == null && e.DurationSeconds != null && e.DurationSeconds <= 60,
                 e.IsDownloaded,
                 FeedSlug = e.Feed.Slug,
                 e.DownloadedFileName,
@@ -260,7 +274,7 @@
 
         detail = row is null
             ? null
-            : new EpisodeDetail(row.Id, row.Title, row.FeedTitle, row.PublishedAtUtc, row.DurationSeconds, row.DescriptionHtml, row.IsPlayed, row.IsArchived, row.IsRss, row.IsDownloaded, GetFileSize(row.FeedSlug, row.DownloadedFileName));
+            : new EpisodeDetail(row.Id, row.Title, row.FeedTitle, row.PublishedAtUtc, row.DurationSeconds, row.DescriptionHtml, row.IsPlayed, row.IsArchived, row.IsRss, row.IsShort, row.IsDownloaded, GetFileSize(row.FeedSlug, row.DownloadedFileName));
     }
 
     private string GetDownloadStatusText(EpisodeDetail current)
@@ -389,7 +403,7 @@
 
     private sealed record FeedSummary(int Id, string Title, int ActiveCount, bool HasArtwork);
 
-    private sealed record EpisodeListItem(int Id, string Title, string FeedTitle, DateTime PublishedAtUtc, int? DurationSeconds, long? FileSizeBytes);
+    private sealed record EpisodeListItem(int Id, string Title, string FeedTitle, DateTime PublishedAtUtc, int? DurationSeconds, bool IsShort, long? FileSizeBytes);
 
-    private sealed record EpisodeDetail(int Id, string Title, string FeedTitle, DateTime PublishedAtUtc, int? DurationSeconds, string? DescriptionHtml, bool IsPlayed, bool IsArchived, bool IsRss, bool IsDownloaded, long? FileSizeBytes);
+    private sealed record EpisodeDetail(int Id, string Title, string FeedTitle, DateTime PublishedAtUtc, int? DurationSeconds, string? DescriptionHtml, bool IsPlayed, bool IsArchived, bool IsRss, bool IsShort, bool IsDownloaded, long? FileSizeBytes);
 }
