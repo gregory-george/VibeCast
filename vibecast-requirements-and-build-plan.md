@@ -421,7 +421,8 @@ VibeCast/
 ├─ config.json                # app settings (incl. sticky port preference)
 ├─ run.lock                   # live port for the current run (created on bind, removed on exit)
 ├─ podcasts.db                # SQLite (WAL): feeds, episodes, state, archive
-├─ podcasts.db.bak            # pre-migration backup (see §11, Phase 0 / startup)
+├─ backups/                   # timestamped pre-migration backups, last 10 kept (see §11, Phase 0 / startup)
+│  └─ podcasts-yyyyMMddHHmmss.db.bak
 ├─ downloads/                 # downloaded RSS enclosures
 │  └─ <feed-slug>/
 │     └─ <episode-file>
@@ -464,8 +465,8 @@ port**; **persist live port to `run.lock` + `config.json`**; single-instance `Mu
 (second instance reads `run.lock` to open the live tab); launch → `ApplicationStarted`
 gate → open default browser; graceful `StopApplication()`; SQLite (WAL) +
 `IDbContextFactory` setup + `busy_timeout`; **EF Core auto-migrate on startup, preceded
-by a `podcasts.db` → `podcasts.db.bak` copy**; config.json load; portable path
-resolution.
+by a `podcasts.db` → `backups/podcasts-yyyyMMddHHmmss.db.bak` copy, keeping the last
+10 backups**; config.json load; portable path resolution.
 
 **Phase 1 — Subscriptions & feed parsing**
 Add feed by URL; YouTube handle→channelId resolution (+ raw channel_id/feed-URL
@@ -536,7 +537,8 @@ update flow (app must be closed first — Windows locks a running executable).
 - **Port float / stale bookmarks** — auto-fallback can move the URL; the second-instance
   path and tray Reopen UI must read the live port from `run.lock`, not assume `5123`.
 - **Migration on a years-deep DB** — auto-migrate runs against a long-lived, accumulating
-  library; the **`podcasts.db.bak` copy before `Migrate()`** is the safety net.
+  library; the **timestamped `backups/podcasts-yyyyMMddHHmmss.db.bak` copy before
+  `Migrate()`** (last 10 kept) is the safety net.
 - **Update swap locking** — the `.exe` can't be replaced while running; finish-then-exit
   + tray Quit make closing clean, but document it.
 - **YouTube speed ceiling** — the IFrame embed only honors YouTube's native menu

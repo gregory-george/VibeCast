@@ -25,7 +25,8 @@ VibeCast/
 ├─ config.json            # settings, including the sticky port preference
 ├─ run.lock                # live port for the current run (present only while running)
 ├─ podcasts.db             # SQLite: feeds, episodes, state, archive
-├─ podcasts.db.bak         # pre-migration backup, refreshed automatically
+├─ backups/                # timestamped pre-migration backups, last 10 kept
+│  └─ podcasts-yyyyMMddHHmmss.db.bak
 ├─ downloads/<feed-slug>/  # downloaded RSS enclosures
 └─ logs/vibecast-YYYYMMDD.log
 ```
@@ -53,7 +54,8 @@ hand:
    the folder, overwriting the old one.
 3. Leave `config.json`, `podcasts.db`, `downloads/`, and `logs/` in place — they're
    your data, untouched by the swap. The app auto-migrates the database on next
-   launch (backing it up to `podcasts.db.bak` first).
+   launch (backing it up to `backups/podcasts-yyyyMMddHHmmss.db.bak` first, keeping
+   the last 10).
 4. Relaunch.
 
 ## Building a release

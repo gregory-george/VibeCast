@@ -57,8 +57,9 @@ These are the things that silently break the app if violated. They apply in ever
   threads in the same process.
 - Set a **`busy_timeout`** and **retry on `SQLITE_BUSY`.** WAL = many-readers / one-writer,
   not free concurrent writes.
-- EF migrations **auto-apply on startup**, but **copy `podcasts.db` → `podcasts.db.bak`
-  before calling `Migrate()`.**
+- EF migrations **auto-apply on startup**, but **copy `podcasts.db` →
+  `backups/podcasts-yyyyMMddHHmmss.db.bak` before calling `Migrate()`**, keeping only the
+  **last 10** backups (oldest pruned automatically).
 
 **Untrusted input (feeds are hostile)**
 - **Always sanitize show-note HTML before rendering** (use `HtmlSanitizer`): strip scripts
@@ -169,7 +170,8 @@ VibeCast/
 ├─ config.json           # app settings (incl. sticky port preference)
 ├─ run.lock              # live port for the current run (created on bind, removed on exit)
 ├─ podcasts.db           # SQLite (WAL): feeds, episodes, state, archive
-├─ podcasts.db.bak       # pre-migration backup
+├─ backups/              # timestamped pre-migration backups, last 10 kept
+│  └─ podcasts-yyyyMMddHHmmss.db.bak
 ├─ downloads/<feed-slug>/<episode-file>
 └─ logs/vibecast-YYYYMMDD.log
 ```
