@@ -84,6 +84,13 @@ internal sealed class AppConfig
     /// </summary>
     public string Theme { get; set; } = "System";
 
+    /// <summary>
+    /// Episode list sort order on the library page (see
+    /// <see cref="VibeCast.Components.Pages.Home"/>): newest-first when true, oldest-first
+    /// when false. Default true (newest-first).
+    /// </summary>
+    public bool EpisodeSortDescending { get; set; } = true;
+
     public static AppConfig Load()
     {
         if (!File.Exists(AppPaths.ConfigFile))

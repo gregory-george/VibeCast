@@ -62,6 +62,9 @@
                 <input type="checkbox" checked="@showArchived" @onchange="ToggleShowArchivedAsync" />
                 Show archived
             </label>
+            <button @onclick="ToggleSortOrderAsync" title="Toggle sort order">
+                @(Config.EpisodeSortDescending ? "Newest first ↓" : "Oldest first ↑")
+            </button>
         </div>
 
         @if (episodes is null)
@@ -173,8 +176,11 @@
             query = query.Where(e => e.FeedId == feedId);
         }
 
+        query = Config.EpisodeSortDescending
+            ? query.OrderByDescending(e => e.PublishedAtUtc)
+            : query.OrderBy(e => e.PublishedAtUtc);
+
         var rows = await query
-            .OrderByDescending(e => e.PublishedAtUtc)
             .Select(e => new
             {
                 e.Id,
@@ -211,6 +217,13 @@
         {
             await SelectFeedAsync(null);
         }
+    }
+
+    private async Task ToggleSortOrderAsync()
+    {
+        Config.EpisodeSortDescending = !Config.EpisodeSortDescending;
+        Config.Save();
+        await LoadEpisodesAsync();
     }
 
     private async Task ToggleShowArchivedAsync(ChangeEventArgs e)
