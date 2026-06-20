@@ -12,11 +12,13 @@
 
 <PageTitle>Feeds - VibeCast</PageTitle>
 
+<div class="page">
+
 <h1>Feeds</h1>
 
 <p>
     <input @bind="newFeedUrl" @bind:event="oninput" placeholder="Podcast RSS or YouTube channel URL" style="width: 28rem;" />
-    <button @onclick="AddFeedAsync" disabled="@isAdding">Add</button>
+    <button class="primary" @onclick="AddFeedAsync" disabled="@isAdding">Add</button>
 </p>
 
 @if (!string.IsNullOrEmpty(statusMessage))
@@ -75,7 +77,7 @@ else
                         @(feed.LastRefreshedUtc?.ToLocalTime().ToString("g") ?? "never")
                         @if (feed.LastRefreshError is not null)
                         {
-                            <span style="color: #c0392b;" title="@feed.LastRefreshError">&#9888; failed</span>
+                            <span style="color: var(--vc-danger);" title="@feed.LastRefreshError">&#9888; failed</span>
                         }
                     </td>
                     <td>
@@ -99,6 +101,8 @@ else
         </tbody>
     </table>
 }
+
+</div>
 
 @code {
     private List<FeedRow>? feeds;

@@ -119,13 +119,13 @@
                     {
                         <button @onclick="() => DownloadNow(detail)">Download</button>
                     }
-                    <button @onclick="() => PlayRssAsync(detail.Id)">Play</button>
+                    <button class="primary" @onclick="() => PlayRssAsync(detail.Id)">Play</button>
                 </p>
             }
             else
             {
                 <p>
-                    <button @onclick="() => PlayYouTubeAsync(detail.Id)">Watch</button>
+                    <button class="primary" @onclick="() => PlayYouTubeAsync(detail.Id)">Watch</button>
                 </p>
             }
 

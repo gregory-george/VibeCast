@@ -1,20 +1,30 @@
 .library {
     display: flex;
     height: 100vh;
-    font-family: system-ui, sans-serif;
+    font-family: inherit;
+    background: var(--vc-bg);
+    color: var(--vc-text);
 }
 
 .feed-sidebar {
     width: 220px;
     flex-shrink: 0;
-    border-right: 1px solid #ddd;
-    padding: 0.75rem;
+    border-right: 1px solid var(--vc-border);
+    background: var(--vc-surface);
+    padding: 0.85rem 0.75rem;
     overflow-y: auto;
 }
 
     .feed-sidebar h1 {
-        font-size: 1.1rem;
-        margin: 0 0 0.5rem 0;
+        font-size: 1.35rem;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        margin: 0.1rem 0 0.85rem 0.35rem;
+        background: var(--vc-gradient);
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+        color: var(--vc-accent);
     }
 
     .feed-sidebar ul {
@@ -26,28 +36,47 @@
     .feed-sidebar button {
         display: flex;
         justify-content: space-between;
+        align-items: center;
+        gap: 0.5rem;
         width: 100%;
         text-align: left;
         background: none;
-        border: none;
-        padding: 0.4rem 0.5rem;
+        border: 1px solid transparent;
+        padding: 0.4rem 0.55rem;
+        margin-bottom: 1px;
         cursor: pointer;
-        border-radius: 4px;
+        border-radius: var(--vc-radius-sm);
+        color: var(--vc-text);
+        transition: background 0.12s ease;
     }
 
+        .feed-sidebar button:hover {
+            background: var(--vc-surface-2);
+            border-color: transparent;
+        }
+
         .feed-sidebar button.selected {
-            background: #e6e6e6;
+            background: var(--vc-accent-soft);
+            color: var(--vc-accent-strong);
             font-weight: 600;
+            box-shadow: inset 3px 0 0 var(--vc-accent);
         }
 
     .feed-sidebar .count {
-        color: #888;
+        color: var(--vc-text-faint);
+        font-size: 0.82rem;
+        font-variant-numeric: tabular-nums;
+        flex-shrink: 0;
+    }
+
+    .feed-sidebar button.selected .count {
+        color: var(--vc-accent);
     }
 
     .feed-sidebar .feed-name {
         display: flex;
         align-items: center;
-        gap: 0.4rem;
+        gap: 0.45rem;
         min-width: 0;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -55,31 +84,51 @@
     }
 
     .feed-sidebar .feed-art {
-        width: 1.2rem;
-        height: 1.2rem;
+        width: 1.3rem;
+        height: 1.3rem;
         flex-shrink: 0;
-        border-radius: 3px;
+        border-radius: 4px;
         object-fit: cover;
+    }
+
+    .feed-sidebar .feed-filter {
+        font-size: 0.8rem;
+        color: var(--vc-text-muted);
+        padding: 0.35rem 0.55rem 0.6rem;
+        line-height: 1.35;
+    }
+
+    .feed-sidebar > p {
+        margin: 0.15rem 0;
+        padding: 0 0.55rem;
+        font-size: 0.88rem;
     }
 
 .episode-list {
     width: 360px;
     flex-shrink: 0;
-    border-right: 1px solid #ddd;
+    border-right: 1px solid var(--vc-border);
+    background: var(--vc-bg);
     overflow-y: auto;
-    padding: 0.75rem;
+    padding: 0.85rem;
 }
 
 .episode-list-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.6rem;
 }
 
     .episode-list-header h2 {
-        font-size: 1rem;
+        font-size: 1.05rem;
+        font-weight: 600;
         margin: 0;
+    }
+
+    .episode-list-header label {
+        font-size: 0.82rem;
+        color: var(--vc-text-muted);
     }
 
 .episode-list ul {
@@ -89,31 +138,56 @@
 }
 
 .episode-list li {
-    padding: 0.5rem;
-    border-bottom: 1px solid #eee;
+    padding: 0.6rem 0.65rem;
+    margin-bottom: 2px;
+    border: 1px solid transparent;
+    border-radius: var(--vc-radius);
     cursor: pointer;
+    transition: background 0.12s ease, border-color 0.12s ease;
 }
 
+    .episode-list li:hover {
+        background: var(--vc-surface);
+        border-color: var(--vc-border);
+    }
+
     .episode-list li.selected {
-        background: #e6f0ff;
+        background: var(--vc-surface);
+        border-color: var(--vc-accent);
+        box-shadow: 0 0 0 1px var(--vc-accent), 0 2px 8px var(--vc-focus-glow);
     }
 
 .episode-title {
     font-weight: 500;
+    color: var(--vc-text);
+    margin-bottom: 0.15rem;
 }
 
 .episode-meta {
-    color: #888;
-    font-size: 0.85rem;
+    color: var(--vc-text-muted);
+    font-size: 0.82rem;
 }
 
 .episode-detail {
     flex-grow: 1;
     overflow-y: auto;
-    padding: 1rem 1.5rem;
+    padding: 1.25rem 1.75rem;
+    background: var(--vc-bg);
 }
 
+    .episode-detail h2 {
+        font-size: 1.4rem;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+        margin: 0 0 0.4rem;
+    }
+
 .show-notes {
-    margin-top: 1rem;
-    line-height: 1.5;
+    margin-top: 1.25rem;
+    line-height: 1.6;
+    color: var(--vc-text);
 }
+
+    .show-notes a {
+        color: var(--vc-accent);
+    }

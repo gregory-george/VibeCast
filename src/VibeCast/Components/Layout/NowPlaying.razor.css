@@ -7,11 +7,12 @@
     display: flex;
     align-items: center;
     gap: 1rem;
-    background: #1f2430;
-    color: #f3f3f3;
-    padding: 0.5rem 1rem;
-    box-shadow: 0 -1px 4px rgba(0, 0, 0, 0.3);
-    font-family: system-ui, sans-serif;
+    background: var(--vc-player-surface);
+    color: var(--vc-player-text);
+    padding: 0.55rem 1rem;
+    border-top: 1px solid var(--vc-player-accent);
+    box-shadow: 0 -2px 16px rgba(12, 26, 51, 0.55), 0 -1px 0 rgba(70, 200, 255, 0.25);
+    font-family: inherit;
 }
 
 .now-playing-expanded {
@@ -22,13 +23,13 @@
     justify-content: center;
     gap: 0.75rem;
     padding: 1rem;
-    background: #0b0d12;
+    background: var(--vc-player-bg);
 }
 
 .now-playing-loading {
     justify-content: center;
     font-style: italic;
-    color: #ccc;
+    color: var(--vc-player-text-muted);
 }
 
 .now-playing-info {
@@ -60,7 +61,7 @@
 
 .now-playing-feed {
     font-size: 0.8rem;
-    color: #aaa;
+    color: var(--vc-player-text-muted);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -100,7 +101,7 @@
     height: 6px;
     margin-bottom: 4px;
     border-radius: 3px;
-    background: #4a5263;
+    background: var(--vc-player-border);
     cursor: ns-resize;
     flex-shrink: 0;
     touch-action: none;
@@ -108,7 +109,7 @@
 
 .video-resize-handle:hover,
 .video-resize-handle:active {
-    background: #6a7388;
+    background: var(--vc-player-accent);
 }
 
 .speed-control {
@@ -116,6 +117,19 @@
     display: flex;
     align-items: center;
     gap: 0.35rem;
+    color: var(--vc-player-text-muted);
+}
+
+.speed-control select {
+    color: var(--vc-player-text);
+    background: var(--vc-player-surface-2);
+    border: 1px solid var(--vc-player-border);
+    border-radius: var(--vc-radius-sm);
+    padding: 0.2rem 0.3rem;
+}
+
+.speed-control input[type="checkbox"] {
+    accent-color: var(--vc-player-accent);
 }
 
 .now-playing-actions {
@@ -125,12 +139,18 @@
 }
 
 .now-playing-actions button {
-    background: #353d4d;
-    color: #f3f3f3;
-    border: 1px solid #4a5263;
-    border-radius: 4px;
+    background: var(--vc-player-surface-2);
+    color: var(--vc-player-text);
+    border: 1px solid var(--vc-player-border);
+    border-radius: var(--vc-radius-sm);
     padding: 0.35rem 0.6rem;
     cursor: pointer;
+    transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.now-playing-actions button:hover {
+    background: var(--vc-player-border);
+    border-color: var(--vc-player-accent);
 }
 
 .now-playing-expanded .now-playing-info {

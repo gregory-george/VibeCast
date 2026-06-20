@@ -1,17 +1,256 @@
+/* ===========================================================================
+   VibeCast theme — a blue system derived from the app icon (deep-navy field,
+   royal-blue "VC" monogram, cyan waveform glow). Light + dark via
+   prefers-color-scheme; the now-playing bar stays dark navy in both modes.
+   =========================================================================== */
+
+:root {
+    color-scheme: light dark;
+
+    /* Light mode (default) */
+    --vc-bg: #f4f8fd;
+    --vc-surface: #ffffff;
+    --vc-surface-2: #eaf2fc;
+    --vc-border: #dbe6f3;
+    --vc-border-strong: #c2d4ea;
+    --vc-text: #132238;
+    --vc-text-muted: #5c6f8a;
+    --vc-text-faint: #8497ad;
+
+    --vc-accent: #1f6fe5;
+    --vc-accent-strong: #1559c0;
+    --vc-accent-bright: #1397d6;
+    --vc-accent-soft: #e6f0ff;
+    --vc-on-accent: #ffffff;
+    --vc-focus-glow: rgba(31, 111, 229, 0.30);
+
+    --vc-success: #2f9e54;
+    --vc-warning: #d98a16;
+    --vc-danger: #d6463f;
+
+    /* Brand gradient + always-dark player chrome (mode-independent) */
+    --vc-gradient: linear-gradient(135deg, #2d7df6 0%, #46c8ff 100%);
+    --vc-player-bg: #0c1a33;
+    --vc-player-surface: #16244a;
+    --vc-player-surface-2: #20316092;
+    --vc-player-border: #2a3c66;
+    --vc-player-text: #eaf1fb;
+    --vc-player-text-muted: #9db1cf;
+    --vc-player-accent: #46c8ff;
+
+    --vc-radius: 8px;
+    --vc-radius-sm: 5px;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --vc-bg: #0c1a33;
+        --vc-surface: #14213f;
+        --vc-surface-2: #1b2b52;
+        --vc-border: #25365e;
+        --vc-border-strong: #33487a;
+        --vc-text: #eaf1fb;
+        --vc-text-muted: #9db1cf;
+        --vc-text-faint: #6f83a3;
+
+        --vc-accent: #3d8bf7;
+        --vc-accent-strong: #5ba0ff;
+        --vc-accent-bright: #46c8ff;
+        --vc-accent-soft: rgba(61, 139, 247, 0.18);
+        --vc-on-accent: #ffffff;
+        --vc-focus-glow: rgba(70, 200, 255, 0.45);
+
+        --vc-success: #44c06b;
+        --vc-warning: #e8a93a;
+        --vc-danger: #e2554e;
+    }
+}
+
+html, body {
+    margin: 0;
+    background: var(--vc-bg);
+    color: var(--vc-text);
+    font-family: "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, sans-serif;
+    font-size: 15px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3 {
+    color: var(--vc-text);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+}
+
+a {
+    color: var(--vc-accent);
+    text-decoration: none;
+}
+
+a:hover {
+    color: var(--vc-accent-strong);
+    text-decoration: underline;
+}
+
+::selection {
+    background: var(--vc-accent-soft);
+    color: var(--vc-text);
+}
+
+/* Pages that still render raw HTML (Feeds, Settings, Downloads) get themed
+   controls for free through these element-level defaults. */
+button {
+    font: inherit;
+    color: var(--vc-text);
+    background: var(--vc-surface);
+    border: 1px solid var(--vc-border-strong);
+    border-radius: var(--vc-radius-sm);
+    padding: 0.35rem 0.75rem;
+    cursor: pointer;
+    transition: background 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
+}
+
+button:hover:not(:disabled) {
+    background: var(--vc-surface-2);
+    border-color: var(--vc-accent);
+}
+
+button:active:not(:disabled) {
+    transform: translateY(0.5px);
+}
+
+button:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+/* Primary call-to-action buttons opt in with class="primary". */
+button.primary {
+    color: var(--vc-on-accent);
+    background: var(--vc-gradient);
+    border: none;
+    box-shadow: 0 1px 3px var(--vc-focus-glow);
+}
+
+button.primary:hover:not(:disabled) {
+    background: var(--vc-gradient);
+    box-shadow: 0 2px 10px var(--vc-focus-glow);
+}
+
+input[type="text"], input[type="number"], input[type="search"], input:not([type]), select, textarea {
+    font: inherit;
+    color: var(--vc-text);
+    background: var(--vc-surface);
+    border: 1px solid var(--vc-border-strong);
+    border-radius: var(--vc-radius-sm);
+    padding: 0.35rem 0.5rem;
+}
+
+input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-visible {
+    outline: none;
+    border-color: var(--vc-accent);
+    box-shadow: 0 0 0 3px var(--vc-focus-glow);
+}
+
+input[type="checkbox"] {
+    accent-color: var(--vc-accent);
+    width: 1rem;
+    height: 1rem;
+    vertical-align: -0.15rem;
+}
+
+label {
+    color: var(--vc-text);
+}
+
+/* Document-flow pages (Feeds, Settings, Downloads) — Home is full-bleed and
+   opts out of this wrapper. */
+.page {
+    max-width: 72rem;
+    padding: 1.5rem 2rem 5rem;
+}
+
+    .page h1 {
+        font-size: 1.6rem;
+        margin: 0 0 1rem;
+    }
+
+    .page h2 {
+        font-size: 1.1rem;
+        margin: 0 0 0.6rem;
+        padding-bottom: 0.35rem;
+        border-bottom: 1px solid var(--vc-border);
+    }
+
+section {
+    margin-bottom: 1.5rem;
+}
+
+table {
+    border-collapse: collapse;
+    width: 100%;
+}
+
+th, td {
+    text-align: left;
+    padding: 0.5rem 0.65rem;
+    border-bottom: 1px solid var(--vc-border);
+}
+
+thead th {
+    color: var(--vc-text-muted);
+    font-weight: 600;
+    font-size: 0.82rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    border-bottom: 1px solid var(--vc-border-strong);
+}
+
+tbody tr:hover {
+    background: var(--vc-surface-2);
+}
+
+.error {
+    color: var(--vc-danger);
+}
+
+/* Slim, theme-aware scrollbars */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: var(--vc-border-strong) transparent;
+}
+
+*::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+*::-webkit-scrollbar-thumb {
+    background: var(--vc-border-strong);
+    border-radius: 6px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+    background: var(--vc-text-faint);
+    background-clip: padding-box;
+}
+
 h1:focus {
     outline: none;
 }
 
 .valid.modified:not([type=checkbox]) {
-    outline: 1px solid #26b050;
+    outline: 1px solid var(--vc-success);
 }
 
 .invalid {
-    outline: 1px solid #e50000;
+    outline: 1px solid var(--vc-danger);
 }
 
 .validation-message {
-    color: #e50000;
+    color: var(--vc-danger);
 }
 
 #blazor-error-ui {
