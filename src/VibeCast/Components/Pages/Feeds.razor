@@ -16,6 +16,8 @@
 
 <h1>Feeds</h1>
 
+<p><a href="/">&larr; Back to library</a></p>
+
 <p>
     <input @bind="newFeedUrl" @bind:event="oninput" placeholder="Podcast RSS or YouTube channel URL" style="width: 28rem;" />
     <button class="primary" @onclick="AddFeedAsync" disabled="@isAdding">Add</button>
