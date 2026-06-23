@@ -35,7 +35,7 @@ export async function init(elementId, videoId, startSeconds, dotNetRef, captions
                 videoId: videoId,
                 height: '100%',
                 width: '100%',
-                playerVars: { autoplay: 1, start: Math.floor(startSeconds || 0), cc_load_policy: captionsEnabled ? 1 : 0 },
+                playerVars: { autoplay: 1, start: Math.floor(startSeconds || 0), cc_load_policy: captionsEnabled ? 1 : 0, fs: 0, disablekb: 1 },
                 events: {
                     onReady: () => resolve(),
                     onError: (e) => console.error('[vibecast-yt] player error', e.data),
