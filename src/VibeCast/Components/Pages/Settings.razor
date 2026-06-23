@@ -110,6 +110,13 @@
     </p>
     <p>
         <label>
+            Skip seconds (left/right arrow keys)
+            <input type="number" min="1" max="300" style="width: 5rem;" value="@Config.SkipSeconds" @onchange="UpdateSkipSecondsAsync" />
+        </label>
+        &mdash; how far left/right arrow keys jump during playback.
+    </p>
+    <p>
+        <label>
             <input type="checkbox" checked="@Config.ClosedCaptionsEnabled" @onchange="e => SaveBoolAsync(v => Config.ClosedCaptionsEnabled = v, e)" />
             Closed captions on by default
         </label>
@@ -229,6 +236,15 @@
         if (decimal.TryParse(e.Value as string, out var speed) && speed is >= 1.0m and <= 3.0m)
         {
             Config.DefaultPlaybackSpeed = speed;
+            Config.Save();
+        }
+    }
+
+    private void UpdateSkipSecondsAsync(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value as string, out var seconds) && seconds > 0)
+        {
+            Config.SkipSeconds = seconds;
             Config.Save();
         }
     }

@@ -17,6 +17,35 @@ export function removeEscapeListener() {
     }
 }
 
+let skipHandler = null;
+
+export function addSkipListener(dotNetRef) {
+    removeSkipListener();
+    skipHandler = (e) => {
+        if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') {
+            return;
+        }
+        if (e.ctrlKey || e.altKey || e.metaKey || e.shiftKey) {
+            return;
+        }
+        const target = e.target;
+        const tag = target && target.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (target && target.isContentEditable)) {
+            return;
+        }
+        e.preventDefault();
+        dotNetRef.invokeMethodAsync('OnSkipKeyPressed', e.key === 'ArrowLeft' ? -1 : 1);
+    };
+    window.addEventListener('keydown', skipHandler);
+}
+
+export function removeSkipListener() {
+    if (skipHandler) {
+        window.removeEventListener('keydown', skipHandler);
+        skipHandler = null;
+    }
+}
+
 const MIN_VIDEO_HEIGHT = 80;
 const MAX_VIDEO_HEIGHT = 500;
 

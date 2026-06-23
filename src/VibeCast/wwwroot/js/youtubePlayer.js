@@ -78,3 +78,13 @@ export function setPlaybackRate(rate) {
 export function getAvailablePlaybackRates() {
     return player ? player.getAvailablePlaybackRates() : [1];
 }
+
+export function getDuration() {
+    return player ? player.getDuration() : 0;
+}
+
+export function seekTo(seconds) {
+    if (player) {
+        player.seekTo(seconds, true);
+    }
+}

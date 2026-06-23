@@ -38,6 +38,12 @@ internal sealed class AppConfig
     public decimal DefaultPlaybackSpeed { get; set; } = 1.0m;
 
     /// <summary>
+    /// Seconds the left/right arrow keys jump backward/forward during playback (RSS and
+    /// YouTube). Default 10.
+    /// </summary>
+    public int SkipSeconds { get; set; } = 10;
+
+    /// <summary>
     /// Whether closed captions start on for newly-opened YouTube videos. RSS has no
     /// caption tracks to toggle, so this only affects the YouTube embed. Default on.
     /// </summary>

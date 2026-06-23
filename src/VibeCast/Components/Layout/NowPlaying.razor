@@ -116,6 +116,7 @@ else if (PlaybackService.IsAwaitingDownload)
     private ElementReference videoWrapElement;
     private ElementReference resizeHandleElement;
     private bool videoResizeActive;
+    private bool skipListenerActive;
 
     protected override void OnInitialized() => PlaybackService.Changed += OnPlaybackChanged;
 
@@ -168,6 +169,7 @@ else if (PlaybackService.IsAwaitingDownload)
 
         var current = PlaybackService.Current;
         await SyncVideoResizeAsync(current);
+        await SyncSkipListenerAsync(current);
 
         if (current is null || (loadedEpisodeId == current.EpisodeId && loadedIsRss == current.IsRss))
         {
@@ -225,6 +227,65 @@ else if (PlaybackService.IsAwaitingDownload)
 
         videoResizeActive = shouldBeActive;
     }
+
+    private async Task SyncSkipListenerAsync(PlaybackState? current)
+    {
+        bool shouldBeActive = uiModule is not null && current is not null;
+        if (shouldBeActive == skipListenerActive)
+        {
+            return;
+        }
+
+        if (shouldBeActive)
+        {
+            await uiModule!.InvokeVoidAsync("addSkipListener", dotNetRef);
+        }
+        else
+        {
+            await uiModule!.InvokeVoidAsync("removeSkipListener");
+        }
+
+        skipListenerActive = shouldBeActive;
+    }
+
+    [JSInvokable]
+    public async Task OnSkipKeyPressed(int direction)
+    {
+        if (PlaybackService.Current is not { } current)
+        {
+            return;
+        }
+
+        var deltaSeconds = direction * Config.SkipSeconds;
+
+        if (current.IsRss)
+        {
+            if (audioModule is null)
+            {
+                return;
+            }
+
+            var currentTime = await audioModule.InvokeAsync<double>("getCurrentTime", audioElement);
+            var duration = await audioModule.InvokeAsync<double>("getDuration", audioElement);
+            var newTime = ClampSeekTarget(currentTime + deltaSeconds, duration);
+            await audioModule.InvokeVoidAsync("seek", audioElement, newTime);
+        }
+        else
+        {
+            if (youtubeModule is null)
+            {
+                return;
+            }
+
+            var currentTime = await youtubeModule.InvokeAsync<double>("getCurrentTime");
+            var duration = await youtubeModule.InvokeAsync<double>("getDuration");
+            var newTime = ClampSeekTarget(currentTime + deltaSeconds, duration);
+            await youtubeModule.InvokeVoidAsync("seekTo", newTime);
+        }
+    }
+
+    private static double ClampSeekTarget(double seconds, double duration) =>
+        Math.Clamp(seconds, 0, duration > 0 ? duration : double.MaxValue);
 
     [JSInvokable]
     public Task OnVideoHeightChanged(int heightPx)
@@ -387,6 +448,7 @@ else if (PlaybackService.IsAwaitingDownload)
             if (uiModule is not null)
             {
                 await uiModule.InvokeVoidAsync("removeEscapeListener");
+                await uiModule.InvokeVoidAsync("removeSkipListener");
                 await uiModule.DisposeAsync();
             }
         }
