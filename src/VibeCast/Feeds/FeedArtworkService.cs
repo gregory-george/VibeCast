@@ -57,14 +57,24 @@ internal sealed class FeedArtworkService(
             return;
         }
 
-        if (!ArtworkContentType.TryGetExtension(response.Content.Headers.ContentType?.MediaType, out var extension))
+        if (response.Content.Headers.ContentLength is { } declaredLength && declaredLength > MaxArtworkBytes)
         {
             return;
         }
 
-        if (response.Content.Headers.ContentLength is { } declaredLength && declaredLength > MaxArtworkBytes)
+        var headerKnown = ArtworkContentType.TryGetExtension(response.Content.Headers.ContentType?.MediaType, out var extension);
+
+        await using var contentStream = await response.Content.ReadAsStreamAsync(ct);
+
+        byte[]? sniffHeader = null;
+        if (!headerKnown)
         {
-            return;
+            sniffHeader = new byte[12];
+            var read = await ReadFullyAsync(contentStream, sniffHeader, ct);
+            if (!ArtworkContentType.TryDetectFromSignature(sniffHeader.AsSpan(0, read), out extension))
+            {
+                return;
+            }
         }
 
         var feedDir = Path.Combine(AppPaths.DownloadsDirectory, feed.Slug);
@@ -74,7 +84,7 @@ internal sealed class FeedArtworkService(
         var finalPath = Path.Combine(feedDir, fileName);
         var partialPath = finalPath + ".partial";
 
-        if (!await TryStreamToFileAsync(response, partialPath, ct))
+        if (!await TryStreamToFileAsync(contentStream, sniffHeader, partialPath, ct))
         {
             File.Delete(partialPath);
             return;
@@ -96,14 +106,19 @@ internal sealed class FeedArtworkService(
         await db.SaveChangesAsync(ct);
     }
 
-    private static async Task<bool> TryStreamToFileAsync(HttpResponseMessage response, string partialPath, CancellationToken ct)
+    private static async Task<bool> TryStreamToFileAsync(Stream contentStream, byte[]? prefix, string partialPath, CancellationToken ct)
     {
-        await using var contentStream = await response.Content.ReadAsStreamAsync(ct);
         await using var fileStream = new FileStream(
             partialPath, FileMode.Create, FileAccess.Write, FileShare.None, BufferSize, useAsync: true);
 
-        var buffer = new byte[BufferSize];
         long totalRead = 0;
+        if (prefix is { Length: > 0 })
+        {
+            totalRead = prefix.Length;
+            await fileStream.WriteAsync(prefix, ct);
+        }
+
+        var buffer = new byte[BufferSize];
         int bytesRead;
 
         while ((bytesRead = await contentStream.ReadAsync(buffer, ct)) > 0)
@@ -118,5 +133,26 @@ internal sealed class FeedArtworkService(
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Fills the buffer as far as the stream allows (short of EOF), since a single
+    /// ReadAsync over the network can return fewer bytes than requested.
+    /// </summary>
+    private static async Task<int> ReadFullyAsync(Stream stream, byte[] buffer, CancellationToken ct)
+    {
+        var totalRead = 0;
+        while (totalRead < buffer.Length)
+        {
+            var read = await stream.ReadAsync(buffer.AsMemory(totalRead), ct);
+            if (read == 0)
+            {
+                break;
+            }
+
+            totalRead += read;
+        }
+
+        return totalRead;
     }
 }
