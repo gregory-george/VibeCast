@@ -200,7 +200,7 @@
                 FeedTitle = e.Feed.Title ?? e.Feed.OriginalUrl,
                 e.PublishedAtUtc,
                 e.DurationSeconds,
-                IsShort = e.EnclosureUrl == null && e.DurationSeconds != null && e.DurationSeconds <= 60,
+                IsShort = e.EnclosureUrl == null && e.DurationSeconds != null && e.DurationSeconds <= 300,
                 FeedSlug = e.Feed.Slug,
                 e.DownloadedFileName,
             })
@@ -265,7 +265,7 @@
                 e.IsPlayed,
                 e.IsArchived,
                 IsRss = e.EnclosureUrl != null,
-                IsShort = e.EnclosureUrl == null && e.DurationSeconds != null && e.DurationSeconds <= 60,
+                IsShort = e.EnclosureUrl == null && e.DurationSeconds != null && e.DurationSeconds <= 300,
                 e.IsDownloaded,
                 FeedSlug = e.Feed.Slug,
                 e.DownloadedFileName,
