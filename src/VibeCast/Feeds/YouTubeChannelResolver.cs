@@ -30,10 +30,29 @@ internal sealed partial class YouTubeChannelResolver(HttpClient httpClient)
             return null;
         }
 
-        // Raw feed URL fallback: already a videos.xml URL, use as-is.
+        // Raw feed URL fallback: already a videos.xml URL — check if it's a custom
+        // playlist (playlist_id=PL...) so callers know not to apply ExcludeShorts.
         if (uri.AbsolutePath.Contains("/feeds/videos.xml", StringComparison.OrdinalIgnoreCase))
         {
+            var feedQuery = System.Web.HttpUtility.ParseQueryString(uri.Query);
+            var rawPlaylistId = feedQuery["playlist_id"];
+            if (rawPlaylistId is not null && !rawPlaylistId.StartsWith("UULF", StringComparison.Ordinal))
+            {
+                return YouTubeChannelResolution.FromPlaylistId(rawPlaylistId);
+            }
+
             return YouTubeChannelResolution.FromRawFeedUrl(uri.ToString());
+        }
+
+        // youtube.com/playlist?list=PL... — the human-facing playlist URL.
+        if (uri.AbsolutePath.Equals("/playlist", StringComparison.OrdinalIgnoreCase))
+        {
+            var playlistQuery = System.Web.HttpUtility.ParseQueryString(uri.Query);
+            var listId = playlistQuery["list"];
+            if (listId is not null)
+            {
+                return YouTubeChannelResolution.FromPlaylistId(listId);
+            }
         }
 
         // /channel/UC... carries the ID directly; no scrape needed.

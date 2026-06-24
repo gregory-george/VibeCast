@@ -1,11 +1,22 @@
 namespace VibeCast.Feeds;
 
-/// <summary>Either a resolved UC... channel ID or a raw feed URL pasted/discovered directly.</summary>
-internal sealed record YouTubeChannelResolution(string? ChannelId, string? RawFeedUrl)
+/// <summary>
+/// Either a resolved UC... channel ID, a raw feed URL, or a custom playlist (PL...).
+/// <see cref="IsCustomPlaylist"/> is true for user-created playlists — ExcludeShorts
+/// does not apply to them.
+/// </summary>
+internal sealed record YouTubeChannelResolution(string? ChannelId, string? RawFeedUrl, bool IsCustomPlaylist = false)
 {
     public static YouTubeChannelResolution FromChannelId(string channelId) => new(channelId, null);
 
     public static YouTubeChannelResolution FromRawFeedUrl(string feedUrl) => new(null, feedUrl);
+
+    /// <summary>
+    /// Creates a resolution for a user-created playlist (playlist_id=PL...).
+    /// ExcludeShorts is not applicable; the playlist is already a specific set of videos.
+    /// </summary>
+    public static YouTubeChannelResolution FromPlaylistId(string playlistId) =>
+        new(null, $"https://www.youtube.com/feeds/videos.xml?playlist_id={playlistId}", IsCustomPlaylist: true);
 
     public string ToFeedUrl(bool excludeShorts)
     {

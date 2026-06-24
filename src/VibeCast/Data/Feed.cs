@@ -9,7 +9,8 @@ internal sealed class Feed
 
     /// <summary>
     /// The URL actually fetched on refresh. For YouTube this is the resolved
-    /// videos.xml URL (channel_id= or, with ExcludeShorts, playlist_id=UULF...).
+    /// videos.xml URL (channel_id=, playlist_id=UULF... with ExcludeShorts, or
+    /// playlist_id=PL... for user-created playlist feeds).
     /// </summary>
     public required string FeedUrl { get; set; }
 

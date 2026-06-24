@@ -85,7 +85,7 @@ internal sealed class FeedSubscriptionService(
             Title = title,
             Slug = slug,
             ArtworkUrl = artworkUrl,
-            ExcludeShorts = youTube is not null && config.DefaultExcludeShorts,
+            ExcludeShorts = youTube is not null && !youTube.IsCustomPlaylist && config.DefaultExcludeShorts,
             AutoDownloadMaxAgeDays = config.DefaultAutoDownloadMaxAgeDays,
             DateAddedUtc = DateTime.UtcNow,
             LastRefreshedUtc = DateTime.UtcNow,
