@@ -36,7 +36,8 @@ internal static class FeedDocumentParser
 
         var title = channel.Element("title")?.Value.Trim();
         var artwork = channel.Element(Itunes + "image")?.Attribute("href")?.Value
-            ?? channel.Element("image")?.Element("url")?.Value;
+            ?? channel.Element("image")?.Element("url")?.Value
+            ?? channel.Element(Media + "thumbnail")?.Attribute("url")?.Value;
 
         var episodes = channel.Elements("item")
             .Select(ParseRssItem)
