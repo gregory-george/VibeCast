@@ -15,7 +15,12 @@ internal static class AppPaths
     public const string DatabaseBackupPattern = "podcasts-*.db.bak";
 
     public static string DatabaseBackupFor(DateTime timestamp) =>
-        Path.Combine(BackupsDirectory, $"podcasts-{timestamp:yyyyMMddHHmmss}.db.bak");
+        Path.Combine(BackupsDirectory, $"podcasts-{timestamp:yyyyMMdd}.db.bak");
+
+    public const string ConfigBackupPattern = "config-*.json.bak";
+
+    public static string ConfigBackupFor(DateTime timestamp) =>
+        Path.Combine(BackupsDirectory, $"config-{timestamp:yyyyMMdd}.json.bak");
 
     public static string DownloadsDirectory => Path.Combine(BaseDirectory, "downloads");
 

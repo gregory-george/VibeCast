@@ -10,26 +10,32 @@ internal static class DatabaseLifecycle
     private const int MaxBackups = 10;
 
     /// <summary>
-    /// Copies podcasts.db -> backups/podcasts-yyyyMMddHHmmss.db.bak before any migration
-    /// runs, then prunes old backups. Must be called before the EF Core services are
-    /// touched, since it's a plain file copy.
+    /// Copies podcasts.db -> backups/podcasts-yyyyMMdd.db.bak before any migration
+    /// runs (at most once per calendar day), then prunes old backups. Must be called
+    /// before the EF Core services are touched, since it's a plain file copy.
     /// </summary>
     public static void BackupBeforeMigration()
     {
-        if (!File.Exists(AppPaths.DatabaseFile))
+        Directory.CreateDirectory(AppPaths.BackupsDirectory);
+        BackupFile(AppPaths.DatabaseFile, AppPaths.DatabaseBackupFor(DateTime.Today), AppPaths.DatabaseBackupPattern);
+        BackupFile(AppPaths.ConfigFile, AppPaths.ConfigBackupFor(DateTime.Today), AppPaths.ConfigBackupPattern);
+    }
+
+    private static void BackupFile(string sourcePath, string backupPath, string prunePattern)
+    {
+        if (!File.Exists(sourcePath) || File.Exists(backupPath))
         {
             return;
         }
 
-        Directory.CreateDirectory(AppPaths.BackupsDirectory);
-        File.Copy(AppPaths.DatabaseFile, AppPaths.DatabaseBackupFor(DateTime.Now), overwrite: true);
-        PruneOldBackups();
+        File.Copy(sourcePath, backupPath);
+        PruneOldBackups(prunePattern);
     }
 
-    private static void PruneOldBackups()
+    private static void PruneOldBackups(string pattern)
     {
         var backups = new DirectoryInfo(AppPaths.BackupsDirectory)
-            .GetFiles(AppPaths.DatabaseBackupPattern)
+            .GetFiles(pattern)
             .OrderByDescending(f => f.Name, StringComparer.Ordinal)
             .Skip(MaxBackups);
 
