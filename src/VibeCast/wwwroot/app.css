@@ -195,6 +195,18 @@ button.primary:hover:not(:disabled) {
     box-shadow: 0 2px 10px var(--vc-focus-glow);
 }
 
+/* Destructive actions opt in with class="danger". */
+button.danger {
+    color: var(--vc-danger);
+    border-color: var(--vc-danger);
+}
+
+button.danger:hover:not(:disabled) {
+    color: var(--vc-on-accent);
+    background: var(--vc-danger);
+    border-color: var(--vc-danger);
+}
+
 input[type="text"], input[type="number"], input[type="search"], input:not([type]), select, textarea {
     font: inherit;
     color: var(--vc-text);

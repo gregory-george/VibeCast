@@ -97,7 +97,19 @@ else
                                    @onchange="e => UpdateKeepLastCountAsync(feed.Id, e)" />
                         }
                     </td>
-                    <td><button @onclick="() => RefreshOneAsync(feed.Id)">Refresh</button></td>
+                    <td>
+                        @if (pendingDeleteId == feed.Id)
+                        {
+                            <span>Delete this feed and all its data?</span>
+                            <button class="danger" @onclick="() => ConfirmDeleteAsync(feed.Id)" disabled="@isDeleting">Yes, delete</button>
+                            <button @onclick="CancelDelete" disabled="@isDeleting">Cancel</button>
+                        }
+                        else
+                        {
+                            <button @onclick="() => RefreshOneAsync(feed.Id)">Refresh</button>
+                            <button class="danger" @onclick="() => RequestDelete(feed.Id)">Delete</button>
+                        }
+                    </td>
                 </tr>
             }
         </tbody>
@@ -111,6 +123,8 @@ else
     private string newFeedUrl = string.Empty;
     private bool isAdding;
     private bool isRefreshing;
+    private bool isDeleting;
+    private int? pendingDeleteId;
     private string? statusMessage;
     private CancellationTokenSource cts = new();
 
@@ -206,6 +220,35 @@ else
         var result = await RefreshService.RefreshFeedAsync(feedId, cts.Token);
         statusMessage = result.Success ? $"Added {result.AddedCount} new episode(s)." : result.Error;
         await LoadFeedsAsync();
+    }
+
+    private void RequestDelete(int feedId)
+    {
+        pendingDeleteId = feedId;
+        statusMessage = null;
+    }
+
+    private void CancelDelete() => pendingDeleteId = null;
+
+    private async Task ConfirmDeleteAsync(int feedId)
+    {
+        if (isDeleting)
+        {
+            return;
+        }
+
+        isDeleting = true;
+        try
+        {
+            await SubscriptionService.DeleteFeedAsync(feedId, cts.Token);
+            statusMessage = "Feed deleted.";
+            pendingDeleteId = null;
+            await LoadFeedsAsync();
+        }
+        finally
+        {
+            isDeleting = false;
+        }
     }
 
     public void Dispose()

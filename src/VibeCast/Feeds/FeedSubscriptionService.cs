@@ -18,6 +18,8 @@ internal sealed class FeedSubscriptionService(
     YouTubeChannelResolver youTubeChannelResolver,
     FeedFetcher feedFetcher,
     DownloadQueue downloadQueue,
+    DownloadCancellationRegistry cancellationRegistry,
+    DownloadProgressTracker progressTracker,
     FeedArtworkService artworkService,
     AppConfig config)
 {
@@ -128,5 +130,42 @@ internal sealed class FeedSubscriptionService(
         }
 
         return AddFeedResult.Ok(feed.Id, feed.Episodes.Count);
+    }
+
+    /// <summary>
+    /// Permanently removes a feed and every trace of it: cancels any in-flight or
+    /// queued downloads for its episodes, deletes the DB record (episodes cascade),
+    /// and removes the feed's downloads/&lt;slug&gt; folder (downloaded media + cover art).
+    /// Unlike the additive refresh model this is a deliberate, user-confirmed wipe.
+    /// </summary>
+    public async Task DeleteFeedAsync(int feedId, CancellationToken ct)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(ct);
+        var feed = await db.Feeds
+            .Include(f => f.Episodes)
+            .FirstOrDefaultAsync(f => f.Id == feedId, ct);
+        if (feed is null)
+        {
+            return;
+        }
+
+        // Stop any download work for this feed before the rows disappear, and drop
+        // the in-memory progress snapshots so the Downloads UI doesn't show ghosts.
+        foreach (var episode in feed.Episodes)
+        {
+            cancellationRegistry.TryCancel(episode.Id);
+            progressTracker.Clear(episode.Id);
+        }
+
+        var slug = feed.Slug;
+
+        db.Feeds.Remove(feed);
+        await db.SaveChangesAsync(ct);
+
+        var feedDir = Path.Combine(AppPaths.DownloadsDirectory, slug);
+        if (Directory.Exists(feedDir))
+        {
+            Directory.Delete(feedDir, recursive: true);
+        }
     }
 }
