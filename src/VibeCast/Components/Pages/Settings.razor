@@ -147,9 +147,18 @@
     }
 </section>
 
+<section>
+    <h2>About</h2>
+    <p>VibeCast @AppVersion</p>
+</section>
+
 </div>
 
 @code {
+    private static readonly string AppVersion =
+        typeof(Settings).Assembly.GetName().Version is { } v
+            ? $"v{v.Major}.{v.Minor}.{v.Build}"
+            : "v1.0";
     private bool isImporting;
     private string? importSummary;
     private readonly CancellationTokenSource cts = new();
