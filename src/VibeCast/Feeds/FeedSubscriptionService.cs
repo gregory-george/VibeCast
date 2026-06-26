@@ -71,12 +71,12 @@ internal sealed class FeedSubscriptionService(
         var existingSlugs = await db.Feeds.Select(f => f.Slug).ToListAsync(ct);
         var slug = SlugGenerator.Generate(title, existingSlugs);
 
-        // YouTube's videos.xml carries no channel-level artwork, so the avatar is
-        // scraped separately from the channel page.
+        // YouTube's videos.xml carries no channel-level artwork, so the cover is
+        // scraped separately (channel avatar, or playlist thumbnail for PL... feeds).
         var artworkUrl = parsed.ArtworkUrl;
         if (youTube is not null)
         {
-            artworkUrl = await youTubeChannelResolver.TryGetChannelAvatarUrlAsync(youTube, ct);
+            artworkUrl = await youTubeChannelResolver.TryGetArtworkUrlAsync(youTube, ct);
         }
 
         var feed = new Feed

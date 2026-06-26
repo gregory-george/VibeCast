@@ -92,21 +92,36 @@ internal sealed partial class YouTubeChannelResolver(HttpClient httpClient)
 
     /// <summary>
     /// YouTube's videos.xml carries no channel-level artwork (only per-video
-    /// thumbnails), so the channel avatar is scraped separately from the channel
-    /// page's og:image meta tag. Best-effort: returns null on any failure.
+    /// thumbnails), so the feed's cover is scraped from a YouTube web page's
+    /// og:image meta tag. For channel feeds that's the channel page (its avatar);
+    /// for user playlists (playlist_id=PL...), which carry no channel ID, it's the
+    /// playlist page (its own thumbnail). Best-effort: returns null on any failure.
     /// </summary>
-    public async Task<string?> TryGetChannelAvatarUrlAsync(YouTubeChannelResolution resolution, CancellationToken ct)
+    public async Task<string?> TryGetArtworkUrlAsync(YouTubeChannelResolution resolution, CancellationToken ct)
     {
         var channelId = resolution.ChannelId ?? ExtractChannelIdFromFeedUrl(resolution.RawFeedUrl);
-        if (channelId is null)
+        if (channelId is not null)
         {
-            return null;
+            return await TryScrapeOgImageAsync($"https://www.youtube.com/channel/{channelId}", ct);
         }
 
+        // No channel ID derivable (an ordinary PL... playlist doesn't embed one).
+        // Fall back to the playlist page's own og:image thumbnail.
+        var playlistId = ExtractPlaylistIdFromFeedUrl(resolution.RawFeedUrl);
+        if (playlistId is not null)
+        {
+            return await TryScrapeOgImageAsync($"https://www.youtube.com/playlist?list={playlistId}", ct);
+        }
+
+        return null;
+    }
+
+    private async Task<string?> TryScrapeOgImageAsync(string pageUrl, CancellationToken ct)
+    {
         string html;
         try
         {
-            html = await httpClient.GetStringAsync($"https://www.youtube.com/channel/{channelId}", ct);
+            html = await httpClient.GetStringAsync(pageUrl, ct);
         }
         catch (HttpRequestException)
         {
@@ -114,7 +129,10 @@ internal sealed partial class YouTubeChannelResolver(HttpClient httpClient)
         }
 
         var match = OgImagePattern().Match(html);
-        return match.Success ? match.Groups["url"].Value : null;
+        // The meta tag's content is HTML-encoded; playlist thumbnails carry a
+        // signed query string (?sqp=...&rs=...) whose '&' arrive as '&amp;' and
+        // must be decoded or the artwork fetch requests a malformed URL.
+        return match.Success ? System.Net.WebUtility.HtmlDecode(match.Groups["url"].Value) : null;
     }
 
     private static string? ExtractChannelIdFromFeedUrl(string? feedUrl)
@@ -139,6 +157,24 @@ internal sealed partial class YouTubeChannelResolver(HttpClient httpClient)
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Extracts a user-playlist ID (playlist_id=PL...) from a videos.xml feed URL.
+    /// Excludes the UULF... long-form variant, which maps back to a channel ID and
+    /// is handled by <see cref="ExtractChannelIdFromFeedUrl"/> instead.
+    /// </summary>
+    private static string? ExtractPlaylistIdFromFeedUrl(string? feedUrl)
+    {
+        if (feedUrl is null || !Uri.TryCreate(feedUrl, UriKind.Absolute, out var uri))
+        {
+            return null;
+        }
+
+        var playlistId = System.Web.HttpUtility.ParseQueryString(uri.Query)["playlist_id"];
+        return playlistId is not null && !playlistId.StartsWith("UULF", StringComparison.Ordinal)
+            ? playlistId
+            : null;
     }
 
     [GeneratedRegex("^UC[A-Za-z0-9_-]{20,}$")]

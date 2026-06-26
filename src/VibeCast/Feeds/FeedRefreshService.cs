@@ -70,9 +70,9 @@ internal sealed class FeedRefreshService(
         }
         else if (feed.Type == FeedType.YouTube && feed.ArtworkUrl is null)
         {
-            // Backfill for feeds subscribed before channel-avatar scraping existed.
+            // Backfill for feeds subscribed before artwork scraping existed.
             // videos.xml never carries artwork itself, so this is the only path that sets it.
-            feed.ArtworkUrl = await youTubeChannelResolver.TryGetChannelAvatarUrlAsync(
+            feed.ArtworkUrl = await youTubeChannelResolver.TryGetArtworkUrlAsync(
                 YouTubeChannelResolution.FromRawFeedUrl(feed.FeedUrl), ct);
         }
 
