@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using VibeCast.AppHost;
 using VibeCast.Data;
 using VibeCast.Downloads;
@@ -16,7 +17,8 @@ namespace VibeCast.Retention;
 internal sealed class RetentionService(
     IDbContextFactory<AppDbContext> dbContextFactory,
     DownloadProgressTracker progressTracker,
-    AppConfig config)
+    AppConfig config,
+    ILogger<RetentionService> logger)
 {
     public async Task EnforceAllFeedsAsync(CancellationToken ct)
     {
@@ -38,6 +40,11 @@ internal sealed class RetentionService(
             return;
         }
 
+        // Retry any deletes that mark-as-played deferred because the file was locked
+        // (still open in the player). Runs before the keep-last-N pass so a played file
+        // doesn't survive on disk just because it's within the newest N.
+        await RetryDeferredDeletionsAsync(db, feed, ct);
+
         var keepLast = feed.KeepLastCount ?? config.DefaultKeepLastCount;
         if (keepLast <= 0)
         {
@@ -56,10 +63,12 @@ internal sealed class RetentionService(
 
         foreach (var episode in downloaded.Skip(keepLast))
         {
-            var filePath = Path.Combine(AppPaths.DownloadsDirectory, feed.Slug, episode.DownloadedFileName!);
-            if (File.Exists(filePath))
+            var filePath = DownloadFileStore.PathFor(feed.Slug, episode.DownloadedFileName!);
+            if (!DownloadFileStore.TryDelete(filePath, logger))
             {
-                File.Delete(filePath);
+                // Locked (rare here -- the newest N are the likely-playing ones and they
+                // survive the cap). Leave the record so the next sweep retries.
+                continue;
             }
 
             episode.IsDownloaded = false;
@@ -68,5 +77,45 @@ internal sealed class RetentionService(
         }
 
         await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>
+    /// Deletes RSS files for episodes already flagged played whose download is still on
+    /// disk -- i.e. a mark-as-played whose delete was deferred because the file was in
+    /// use. Retries the delete and clears the DB pointer once it succeeds; files still
+    /// locked are left for the next sweep. Restart-safe: the work list is derived purely
+    /// from DB state (IsPlayed + IsDownloaded), so a crash mid-playback recovers on the
+    /// next refresh/shutdown.
+    /// </summary>
+    private async Task RetryDeferredDeletionsAsync(AppDbContext db, Feed feed, CancellationToken ct)
+    {
+        var playedOnDisk = await db.Episodes
+            .Where(e => e.FeedId == feed.Id && e.IsPlayed && e.IsDownloaded && e.DownloadedFileName != null)
+            .ToListAsync(ct);
+
+        if (playedOnDisk.Count == 0)
+        {
+            return;
+        }
+
+        var changed = false;
+        foreach (var episode in playedOnDisk)
+        {
+            var filePath = DownloadFileStore.PathFor(feed.Slug, episode.DownloadedFileName!);
+            if (!DownloadFileStore.TryDelete(filePath, logger))
+            {
+                continue;
+            }
+
+            episode.IsDownloaded = false;
+            episode.DownloadedFileName = null;
+            progressTracker.Clear(episode.Id);
+            changed = true;
+        }
+
+        if (changed)
+        {
+            await db.SaveChangesAsync(ct);
+        }
     }
 }

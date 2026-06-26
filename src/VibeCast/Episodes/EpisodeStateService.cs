@@ -1,5 +1,5 @@
 using Microsoft.EntityFrameworkCore;
-using VibeCast.AppHost;
+using Microsoft.Extensions.Logging;
 using VibeCast.Data;
 using VibeCast.Downloads;
 
@@ -12,7 +12,8 @@ namespace VibeCast.Episodes;
 internal sealed class EpisodeStateService(
     IDbContextFactory<AppDbContext> dbContextFactory,
     DownloadQueue downloadQueue,
-    DownloadProgressTracker progressTracker)
+    DownloadProgressTracker progressTracker,
+    ILogger<EpisodeStateService> logger)
 {
     /// <summary>
     /// For RSS, deletes the downloaded file immediately (CLAUDE.md: mark-as-played is
@@ -33,15 +34,17 @@ internal sealed class EpisodeStateService(
 
         if (episode.EnclosureUrl is not null && episode.DownloadedFileName is not null)
         {
-            var filePath = Path.Combine(AppPaths.DownloadsDirectory, episode.Feed.Slug, episode.DownloadedFileName);
-            if (File.Exists(filePath))
+            var filePath = DownloadFileStore.PathFor(episode.Feed.Slug, episode.DownloadedFileName);
+            if (DownloadFileStore.TryDelete(filePath, logger))
             {
-                File.Delete(filePath);
+                episode.IsDownloaded = false;
+                episode.DownloadedFileName = null;
+                progressTracker.Clear(episodeId);
             }
-
-            episode.IsDownloaded = false;
-            episode.DownloadedFileName = null;
-            progressTracker.Clear(episodeId);
+            // Otherwise the file is locked (almost always still open in the player).
+            // Leave IsDownloaded/DownloadedFileName intact so the retention sweep retries
+            // the delete once playback releases it; the played/archived flags still move
+            // now so the episode leaves the active list immediately.
         }
 
         await db.SaveChangesAsync(ct);
@@ -66,7 +69,7 @@ internal sealed class EpisodeStateService(
         {
             var filePath = episode.DownloadedFileName is null
                 ? null
-                : Path.Combine(AppPaths.DownloadsDirectory, episode.Feed.Slug, episode.DownloadedFileName);
+                : DownloadFileStore.PathFor(episode.Feed.Slug, episode.DownloadedFileName);
 
             if (filePath is null || !File.Exists(filePath))
             {
