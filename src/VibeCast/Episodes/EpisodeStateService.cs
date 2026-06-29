@@ -62,9 +62,9 @@ internal sealed class EpisodeStateService(
         episode.IsPlayed = false;
         episode.IsArchived = false;
 
-        // RSS: re-download only if the file is actually missing (mark-as-played
-        // doesn't delete it yet in this phase -- see Phase 5 -- so this avoids a
-        // redundant re-fetch of a file that's still sitting on disk).
+        // RSS: re-download only if the file is actually missing. Mark-as-played
+        // normally deletes it, but a deferred (locked-file) deletion can leave it on
+        // disk -- skip the redundant re-fetch when it's still there.
         if (episode.EnclosureUrl is not null)
         {
             var filePath = episode.DownloadedFileName is null
@@ -87,9 +87,9 @@ internal sealed class EpisodeStateService(
     }
 
     /// <summary>
-    /// Persists resume position. Meaningless once the file is gone (Phase 5 deletes
-    /// the RSS file on mark-as-played), but harmless to call -- the row simply stops
-    /// being read back by anything once IsPlayed flips.
+    /// Persists resume position. Meaningless once the file is gone (mark-as-played
+    /// deletes the RSS file), but harmless to call -- the row simply stops being read
+    /// back by anything once IsPlayed flips.
     /// </summary>
     public async Task SavePlaybackPositionAsync(int episodeId, int positionSeconds, CancellationToken ct)
     {

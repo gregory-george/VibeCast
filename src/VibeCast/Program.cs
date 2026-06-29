@@ -7,10 +7,10 @@ internal static class Program
 {
     /// <summary>
     /// The WinForms message loop owns this main STA thread (required for the
-    /// future NotifyIcon); the Blazor/Kestrel IHost runs on a background thread.
+    /// NotifyIcon); the Blazor/Kestrel IHost runs on a background thread.
     /// Shutdown is bridged both ways: the host's WaitForShutdownAsync completing
-    /// (success or failure) calls ExitThread() back on this thread, and a future
-    /// tray Quit action (Phase 3) will call StopApplication() on the host.
+    /// (success or failure) calls ExitThread() back on this thread, and tray Quit
+    /// calls StopApplication() on the host.
     /// </summary>
     [STAThread]
     private static void Main(string[] args)
@@ -19,7 +19,7 @@ internal static class Program
         // app shouldn't show one. Done via P/Invoke (not OutputType=WinExe): setting
         // WinExe at the project level breaks the SDK's static web asset / Razor
         // component JS pipeline (blazor.web.js 404s, no interactivity at all),
-        // discovered live-testing the Phase 8 single-file publish.
+        // discovered live-testing the single-file publish.
         FreeConsole();
 
         using var mutex = SingleInstance.TryAcquire();
@@ -38,10 +38,10 @@ internal static class Program
 
         var trayContext = new TrayApplicationContext();
 
-        // Phase 0 only: no tray Quit yet, so Ctrl+C in the dev console window is the
-        // way to trigger a graceful shutdown. Cancel=true stops the runtime from
-        // killing the process immediately, letting StopApplication() finish cleanly
-        // (run.lock removal, WAL checkpoint). Replaced by tray Quit in Phase 3/6.
+        // Dev convenience alongside tray Quit: when the app is run attached to a
+        // console, Ctrl+C triggers the same graceful shutdown. Cancel=true stops the
+        // runtime from killing the process immediately, letting StopApplication()
+        // finish cleanly (run.lock removal, WAL checkpoint).
         Console.CancelKeyPress += (_, e) =>
         {
             e.Cancel = true;

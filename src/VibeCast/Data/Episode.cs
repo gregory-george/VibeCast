@@ -36,9 +36,9 @@ internal sealed class Episode
     /// <summary>YouTube only. The watch?v= link is https://www.youtube.com/watch?v={YouTubeVideoId}.</summary>
     public string? YouTubeVideoId { get; set; }
 
-    // Cross-phase state invariants (CLAUDE.md "Data model invariants"). Played and
-    // archived currently move together but are tracked as distinct flags. Behavior
-    // (mark-as-played, archive UI, downloads, playback) is wired in later phases.
+    // State flags (CLAUDE.md "Data model invariants"). Played and archived currently
+    // move together but are tracked as distinct flags; mark-as-played, the archive UI,
+    // downloads, and playback all read them.
     public bool IsPlayed { get; set; }
 
     public bool IsArchived { get; set; }

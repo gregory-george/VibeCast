@@ -5,7 +5,7 @@ namespace VibeCast.Feeds;
 /// <summary>
 /// Builds the filesystem-safe folder name used under downloads/&lt;feed-slug&gt;/.
 /// Assigned once when a feed is added and never changed afterward, since downloaded
-/// files (Phase 3) live under it.
+/// files live under it.
 /// </summary>
 internal static class SlugGenerator
 {
