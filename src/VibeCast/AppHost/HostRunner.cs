@@ -46,6 +46,10 @@ internal static class HostRunner
         Directory.CreateDirectory(AppPaths.DownloadsDirectory);
         Directory.CreateDirectory(AppPaths.LogsDirectory);
 
+        // Cap the logs folder by age. Backups are capped by count (DatabaseLifecycle), but
+        // the daily logs would otherwise accumulate forever in the app's own folder.
+        LogRetention.PruneOldLogs(AppPaths.LogsDirectory);
+
         // config.json not existing yet is the real "first run" signal -- AppConfig.Load()
         // always returns a fresh instance with HasOfferedDesktopShortcut = false either way.
         var isFirstRun = !File.Exists(AppPaths.ConfigFile);
