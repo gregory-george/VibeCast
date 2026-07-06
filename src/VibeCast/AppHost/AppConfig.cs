@@ -4,6 +4,12 @@ namespace VibeCast.AppHost;
 
 internal sealed class AppConfig
 {
+    // config.json is a single global file, but this instance is a DI singleton mutated
+    // and Save()d from multiple Blazor circuits/threads (settings toggles, the now-playing
+    // resize handle firing from JS, host port persistence). Serialize every read/write
+    // behind one static gate so concurrent saves can't interleave into a corrupt file.
+    private static readonly Lock FileGate = new();
+
     public int? PreferredPort { get; set; }
 
     /// <summary>
@@ -99,25 +105,42 @@ internal sealed class AppConfig
 
     public static AppConfig Load()
     {
-        if (!File.Exists(AppPaths.ConfigFile))
+        lock (FileGate)
         {
-            return new AppConfig();
-        }
+            if (!File.Exists(AppPaths.ConfigFile))
+            {
+                return new AppConfig();
+            }
 
-        try
-        {
-            var json = File.ReadAllText(AppPaths.ConfigFile);
-            return JsonSerializer.Deserialize<AppConfig>(json) ?? new AppConfig();
-        }
-        catch (JsonException)
-        {
-            return new AppConfig();
+            try
+            {
+                var json = File.ReadAllText(AppPaths.ConfigFile);
+                return JsonSerializer.Deserialize<AppConfig>(json) ?? new AppConfig();
+            }
+            catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
+            {
+                // Corrupt/truncated/locked config falls back to defaults rather than
+                // crashing startup. The atomic Save() below makes truncation unlikely,
+                // but a half-written file from an older build or external tampering must
+                // not take the whole app down.
+                return new AppConfig();
+            }
         }
     }
 
     public void Save()
     {
         var json = JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true });
-        File.WriteAllText(AppPaths.ConfigFile, json);
+
+        lock (FileGate)
+        {
+            // Atomic replace: write a sibling temp file, then move it over the target.
+            // A crash mid-write leaves the temp behind (not a truncated config.json), and
+            // the move is atomic on the same volume, so a concurrent Load never sees a
+            // partially-written file.
+            var tempPath = AppPaths.ConfigFile + ".tmp";
+            File.WriteAllText(tempPath, json);
+            File.Move(tempPath, AppPaths.ConfigFile, overwrite: true);
+        }
     }
 }
