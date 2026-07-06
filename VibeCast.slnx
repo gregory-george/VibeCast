@@ -2,4 +2,7 @@
   <Folder Name="/src/">
     <Project Path="src/VibeCast/VibeCast.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/VibeCast.Tests/VibeCast.Tests.csproj" />
+  </Folder>
 </Solution>
