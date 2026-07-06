@@ -44,8 +44,27 @@ internal sealed class PlaybackService : IDisposable
     /// <summary>True while a Play click is waiting on a queued/in-flight download.</summary>
     public bool IsAwaitingDownload => pendingPlayEpisodeId is not null;
 
+    /// <summary>
+    /// Set when a download a Play click was waiting on failed or was canceled, so the
+    /// UI can show why instead of hanging on "will play when ready". Cleared when the
+    /// user dismisses it or starts another play.
+    /// </summary>
+    public string? PendingPlayError { get; private set; }
+
+    /// <summary>Dismisses the <see cref="PendingPlayError"/> banner.</summary>
+    public void DismissPendingPlayError()
+    {
+        if (PendingPlayError is not null)
+        {
+            PendingPlayError = null;
+            Changed?.Invoke();
+        }
+    }
+
     public async Task RequestPlayRssAsync(int episodeId, CancellationToken ct)
     {
+        PendingPlayError = null;
+
         await using var db = await dbContextFactory.CreateDbContextAsync(ct);
         var episode = await db.Episodes.Include(e => e.Feed).FirstOrDefaultAsync(e => e.Id == episodeId, ct);
         if (episode is null || episode.EnclosureUrl is null)
@@ -68,6 +87,8 @@ internal sealed class PlaybackService : IDisposable
 
     public async Task PlayYouTubeAsync(int episodeId, CancellationToken ct)
     {
+        PendingPlayError = null;
+
         await using var db = await dbContextFactory.CreateDbContextAsync(ct);
         var episode = await db.Episodes.Include(e => e.Feed).FirstOrDefaultAsync(e => e.Id == episodeId, ct);
         if (episode is null || episode.YouTubeVideoId is null)
@@ -114,6 +135,7 @@ internal sealed class PlaybackService : IDisposable
     public void Stop()
     {
         pendingPlayEpisodeId = null;
+        PendingPlayError = null;
         Current = null;
         Changed?.Invoke();
     }
@@ -152,13 +174,30 @@ internal sealed class PlaybackService : IDisposable
         }
 
         var snapshot = progressTracker.Get(episodeId);
-        if (snapshot is null || snapshot.Status != DownloadStatus.Completed)
+        if (snapshot is null)
         {
             return;
         }
 
-        pendingPlayEpisodeId = null;
-        _ = LoadAndPlayAsync(episodeId);
+        switch (snapshot.Status)
+        {
+            case DownloadStatus.Completed:
+                pendingPlayEpisodeId = null;
+                _ = LoadAndPlayAsync(episodeId);
+                break;
+
+            // The download the Play click was waiting on won't arrive. Clear the
+            // pending state and surface why, so the "will play when ready" banner
+            // doesn't hang forever (its only other exit was playing something else).
+            case DownloadStatus.Failed:
+            case DownloadStatus.Canceled:
+                pendingPlayEpisodeId = null;
+                PendingPlayError = snapshot.Status == DownloadStatus.Failed
+                    ? $"Couldn't download this episode{(snapshot.ErrorMessage is { } msg ? $": {msg}" : ".")}"
+                    : "Download canceled.";
+                Changed?.Invoke();
+                break;
+        }
     }
 
     private async Task LoadAndPlayAsync(int episodeId)

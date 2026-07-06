@@ -20,6 +20,11 @@ internal sealed class EpisodeDownloader(
 {
     private const int BufferSize = 65536;
 
+    // Downloads run with no overall HttpClient.Timeout (see ConfigureDownloadHttpClient),
+    // so a silent connection is caught by this per-read stall window instead. Any received
+    // data resets it, so a slow-but-alive link keeps going.
+    private const int StallTimeoutSeconds = 100;
+
     public async Task DownloadAsync(int episodeId, CancellationToken ct)
     {
         await using var db = await dbContextFactory.CreateDbContextAsync(ct);
@@ -99,10 +104,32 @@ internal sealed class EpisodeDownloader(
         var buffer = new byte[BufferSize];
         var totalRead = existingLength;
         var lastReportedAt = DateTime.UtcNow;
-        int bytesRead;
 
-        while ((bytesRead = await contentStream.ReadAsync(buffer, ct)) > 0)
+        while (true)
         {
+            int bytesRead;
+
+            // Guard each read with a stall timeout. A read canceled by the outer token
+            // (user cancel / shutdown) propagates as-is and is recorded as Canceled; one
+            // canceled purely by the stall timer becomes a Failed (resumable) download.
+            using (var stallCts = CancellationTokenSource.CreateLinkedTokenSource(ct))
+            {
+                stallCts.CancelAfter(TimeSpan.FromSeconds(StallTimeoutSeconds));
+                try
+                {
+                    bytesRead = await contentStream.ReadAsync(buffer, stallCts.Token);
+                }
+                catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+                {
+                    throw new IOException($"Download stalled: no data received for {StallTimeoutSeconds}s.");
+                }
+            }
+
+            if (bytesRead <= 0)
+            {
+                break;
+            }
+
             await fileStream.WriteAsync(buffer.AsMemory(0, bytesRead), ct);
             totalRead += bytesRead;
 
@@ -113,6 +140,15 @@ internal sealed class EpisodeDownloader(
                 progressTracker.Set(new DownloadProgressSnapshot(episode.Id, episode.Title, feedTitle, DownloadStatus.Downloading, totalRead, totalBytes, null));
                 lastReportedAt = now;
             }
+        }
+
+        // A gracefully-closed-but-short connection (flaky redirector chains sign
+        // short-lived URLs) ends the read loop cleanly with a truncated body. Fail
+        // rather than promote a partial file to "downloaded"; the .partial stays on
+        // disk so the next attempt resumes the remaining bytes via Range.
+        if (totalBytes is { } expected && totalRead < expected)
+        {
+            throw new IOException($"Download truncated: received {totalRead} of {expected} bytes.");
         }
     }
 }

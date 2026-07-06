@@ -92,6 +92,13 @@ else if (PlaybackService.IsAwaitingDownload)
 {
     <div class="now-playing now-playing-loading">Downloading episode&hellip; will play automatically when ready.</div>
 }
+else if (PlaybackService.PendingPlayError is { } pendingError)
+{
+    <div class="now-playing now-playing-error">
+        <span>@pendingError</span>
+        <button @onclick="DismissPendingPlayError">Dismiss</button>
+    </div>
+}
 
 @code {
     private static readonly decimal[] RssRates = Enumerable.Range(10, 21).Select(i => i / 10m).ToArray();
@@ -119,6 +126,8 @@ else if (PlaybackService.IsAwaitingDownload)
     private bool skipListenerActive;
 
     protected override void OnInitialized() => PlaybackService.Changed += OnPlaybackChanged;
+
+    private void DismissPendingPlayError() => PlaybackService.DismissPendingPlayError();
 
     private void OnPlaybackChanged()
     {

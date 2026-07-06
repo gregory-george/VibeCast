@@ -94,6 +94,11 @@ internal static class HostRunner
 
         SingleInstance.OpenInBrowser(port);
 
+        // Resume downloads a prior run left incomplete (the tray Quit dialog promises
+        // in-flight downloads "resume automatically next launch"). Fire-and-forget so
+        // the UI isn't blocked; tied to ApplicationStopping so it doesn't outlive the host.
+        _ = RunStartupDownloadSweepAsync(app.Services, app.Lifetime.ApplicationStopping);
+
         // Refresh-on-open: fire-and-forget so the UI isn't blocked on network
         // calls. Tied to ApplicationStopping so it doesn't outlive the host.
         if (config.RefreshOnOpen)
@@ -119,6 +124,46 @@ internal static class HostRunner
         catch (Exception ex)
         {
             services.GetRequiredService<ILogger<RetentionService>>().LogError(ex, "Shutdown retention cleanup failed");
+        }
+    }
+
+    /// <summary>
+    /// Re-queues RSS enclosures that should be on disk but aren't -- i.e. auto-downloads
+    /// interrupted by a prior exit (their .partial file, if any, resumes via Range).
+    /// Uses the same <see cref="AutoDownloadGate"/> as ingest as the single source of
+    /// truth for "should auto-download", so an item aged past the cutoff stays skipped,
+    /// consistent with the documented behavior. Enqueue only touches an in-memory channel,
+    /// so this returns quickly; the actual downloading happens on the worker.
+    /// </summary>
+    private static async Task RunStartupDownloadSweepAsync(IServiceProvider services, CancellationToken ct)
+    {
+        try
+        {
+            await using var scope = services.CreateAsyncScope();
+            var factory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<AppDbContext>>();
+            var downloadQueue = scope.ServiceProvider.GetRequiredService<DownloadQueue>();
+
+            await using var db = await factory.CreateDbContextAsync(ct);
+            var pending = await db.Episodes
+                .Include(e => e.Feed)
+                .Where(e => e.EnclosureUrl != null && !e.IsDownloaded && !e.IsArchived && !e.IsPlayed && e.Feed.AutoDownloadEnabled)
+                .ToListAsync(ct);
+
+            foreach (var episode in pending)
+            {
+                if (AutoDownloadGate.ShouldAutoDownload(episode.Feed, episode))
+                {
+                    var feedTitle = episode.Feed.Title ?? episode.Feed.OriginalUrl;
+                    downloadQueue.Enqueue(episode.Id, episode.Title, feedTitle);
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            services.GetRequiredService<ILogger<EpisodeDownloader>>().LogError(ex, "Startup download sweep failed");
         }
     }
 
@@ -164,9 +209,19 @@ internal static class HostRunner
 
         builder.Services.AddHttpClient<FeedFetcher>(ConfigureHttpClient);
         builder.Services.AddHttpClient<YouTubeChannelResolver>(ConfigureHttpClient);
-        builder.Services.AddHttpClient<EpisodeDownloader>(ConfigureHttpClient);
         builder.Services.AddHttpClient<FeedArtworkService>(ConfigureHttpClient);
         builder.Services.AddHttpClient<YouTubeDurationService>(ConfigureHttpClient);
+
+        // The downloader must NOT inherit the 30s HttpClient.Timeout: that timeout also
+        // bounds the response *body* read, so it silently aborts any enclosure that takes
+        // longer than 30s to stream (large videos, slow links). Per-download cancellation
+        // is handled explicitly via DownloadCancellationRegistry; only the connect phase
+        // is bounded, via the primary handler's ConnectTimeout.
+        builder.Services.AddHttpClient<EpisodeDownloader>(ConfigureDownloadHttpClient)
+            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+            {
+                ConnectTimeout = TimeSpan.FromSeconds(30),
+            });
 
         builder.Services.AddScoped<FeedSubscriptionService>();
         builder.Services.AddScoped<FeedRefreshService>();
@@ -182,10 +237,18 @@ internal static class HostRunner
         builder.Services.AddHostedService<DownloadWorkerService>();
     }
 
+    private const string BrowserUserAgent =
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
+
     private static void ConfigureHttpClient(HttpClient client)
     {
         client.Timeout = TimeSpan.FromSeconds(30);
-        client.DefaultRequestHeaders.UserAgent.ParseAdd(
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36");
+        client.DefaultRequestHeaders.UserAgent.ParseAdd(BrowserUserAgent);
+    }
+
+    private static void ConfigureDownloadHttpClient(HttpClient client)
+    {
+        client.Timeout = Timeout.InfiniteTimeSpan;
+        client.DefaultRequestHeaders.UserAgent.ParseAdd(BrowserUserAgent);
     }
 }
