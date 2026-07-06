@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -17,6 +18,11 @@ internal sealed partial class YouTubeDurationService(
     IDbContextFactory<AppDbContext> dbContextFactory,
     ILogger<YouTubeDurationService> logger)
 {
+    // Each watch page is an independent network round-trip, so scrape them concurrently
+    // but bounded rather than one-at-a-time. The DB writes are then applied afterward
+    // through a single context (never shared across threads, per the AppDbContext rules).
+    private const int MaxConcurrentScrapes = 4;
+
     public async Task BackfillAsync(IReadOnlyList<Episode> episodes, CancellationToken ct)
     {
         var targets = episodes.Where(e => e.YouTubeVideoId is not null).ToList();
@@ -25,32 +31,40 @@ internal sealed partial class YouTubeDurationService(
             return;
         }
 
-        var changed = false;
+        var scraped = new ConcurrentDictionary<int, int>();
+        var options = new ParallelOptions
+        {
+            MaxDegreeOfParallelism = MaxConcurrentScrapes,
+            CancellationToken = ct,
+        };
+
+        await Parallel.ForEachAsync(targets, options, async (episode, token) =>
+        {
+            var seconds = await TryGetDurationSecondsAsync(episode.YouTubeVideoId!, token);
+            if (seconds is not null)
+            {
+                scraped[episode.Id] = seconds.Value;
+            }
+        });
+
+        if (scraped.IsEmpty)
+        {
+            return;
+        }
+
+        // Apply results through the tracking context rather than mutating the detached
+        // instances passed in from the refresh pass.
         await using var db = await dbContextFactory.CreateDbContextAsync(ct);
-        foreach (var episode in targets)
+        foreach (var (episodeId, seconds) in scraped)
         {
-            var seconds = await TryGetDurationSecondsAsync(episode.YouTubeVideoId!, ct);
-            if (seconds is null)
+            var tracked = await db.Episodes.FindAsync([episodeId], ct);
+            if (tracked is not null)
             {
-                continue;
+                tracked.DurationSeconds = seconds;
             }
-
-            // Re-fetch via the context tracking this episode's row rather than
-            // mutating the detached instance passed in from the refresh pass.
-            var tracked = await db.Episodes.FindAsync([episode.Id], ct);
-            if (tracked is null)
-            {
-                continue;
-            }
-
-            tracked.DurationSeconds = seconds;
-            changed = true;
         }
 
-        if (changed)
-        {
-            await db.SaveChangesAsync(ct);
-        }
+        await db.SaveChangesAsync(ct);
     }
 
     private async Task<int?> TryGetDurationSecondsAsync(string videoId, CancellationToken ct)

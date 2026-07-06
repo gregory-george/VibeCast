@@ -1,3 +1,4 @@
+using System.Net;
 using System.Xml;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -20,18 +21,52 @@ internal sealed class FeedRefreshService(
     FeedArtworkService artworkService,
     YouTubeChannelResolver youTubeChannelResolver,
     YouTubeDurationService youTubeDurationService,
-    ILogger<FeedRefreshService> logger)
+    ILogger<FeedRefreshService> logger,
+    // Backoff between fetch retries. Injectable so tests don't wait real seconds; production
+    // (and DI, which can't supply it) falls back to the exponential default.
+    Func<int, TimeSpan>? retryDelayProvider = null)
 {
+    // Refresh feeds concurrently but bounded, so a large subscription list isn't a long
+    // sequential wait. The cap also limits simultaneous network fetches and SQLite writers
+    // -- WAL is single-writer, and the connection's 30s busy timeout absorbs the contention.
+    private const int MaxConcurrentRefreshes = 4;
+
+    // A transient network blip shouldn't permanently mark a feed as failed. Retry the fetch
+    // a few times with backoff; only genuinely transient errors are retried (see IsTransient).
+    private const int MaxFetchAttempts = 3;
+
+    private readonly Func<int, TimeSpan> retryDelay = retryDelayProvider ?? DefaultRetryDelay;
+
+    private static TimeSpan DefaultRetryDelay(int attempt) => TimeSpan.FromSeconds(Math.Pow(2, attempt - 1));
+
     public async Task RefreshAllAsync(CancellationToken ct)
     {
-        await using var db = await dbContextFactory.CreateDbContextAsync(ct);
-        var feedIds = await db.Feeds.Select(f => f.Id).ToListAsync(ct);
-
-        foreach (var feedId in feedIds)
+        List<int> feedIds;
+        await using (var db = await dbContextFactory.CreateDbContextAsync(ct))
         {
-            ct.ThrowIfCancellationRequested();
-            await RefreshFeedAsync(feedId, ct);
+            feedIds = await db.Feeds.Select(f => f.Id).ToListAsync(ct);
         }
+
+        var options = new ParallelOptions
+        {
+            MaxDegreeOfParallelism = MaxConcurrentRefreshes,
+            CancellationToken = ct,
+        };
+
+        await Parallel.ForEachAsync(feedIds, options, async (feedId, token) =>
+        {
+            try
+            {
+                // RefreshFeedAsync already records fetch/parse failures per feed (each on
+                // its own DbContext from the factory); this guard just stops an unexpected
+                // error in one feed from aborting the whole batch.
+                await RefreshFeedAsync(feedId, token);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                logger.LogError(ex, "Unexpected error refreshing feed {FeedId}", feedId);
+            }
+        });
     }
 
     public async Task<FeedRefreshResult> RefreshFeedAsync(int feedId, CancellationToken ct)
@@ -46,11 +81,17 @@ internal sealed class FeedRefreshService(
         ParsedFeed parsed;
         try
         {
-            parsed = await feedFetcher.FetchAndParseAsync(feed.FeedUrl, ct);
+            parsed = await FetchWithRetriesAsync(feed, ct);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            // Shutdown / navigation-away cancelled the refresh -- not a feed-health problem,
+            // so let it propagate rather than recording a spurious LastRefreshError.
+            throw;
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
         {
-            logger.LogWarning(ex, "Refresh failed for feed {FeedId} ({Url})", feed.Id, feed.FeedUrl);
+            logger.LogWarning(ex, "Refresh failed for feed {FeedId} ({Url}) after {Attempts} attempt(s)", feed.Id, feed.FeedUrl, MaxFetchAttempts);
             return await RecordFailureAsync(db, feed, ct, $"Could not fetch the feed: {ex.Message}");
         }
         catch (XmlException ex)
@@ -123,6 +164,57 @@ internal sealed class FeedRefreshService(
 
         return FeedRefreshResult.Ok(newEpisodes.Count);
     }
+
+    /// <summary>
+    /// Fetches the feed, retrying transient failures with backoff. Non-transient errors
+    /// (permanent 4xx, malformed XML) and the final exhausted attempt propagate to the
+    /// caller, which records them as the feed's LastRefreshError.
+    /// </summary>
+    private async Task<ParsedFeed> FetchWithRetriesAsync(Feed feed, CancellationToken ct)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                return await feedFetcher.FetchAndParseAsync(feed.FeedUrl, ct);
+            }
+            catch (Exception ex) when (attempt < MaxFetchAttempts && IsTransient(ex, ct))
+            {
+                var delay = retryDelay(attempt);
+                logger.LogInformation(
+                    "Transient failure refreshing feed {FeedId} ({Url}) on attempt {Attempt}/{Max}; retrying in {Delay:0.#}s: {Message}",
+                    feed.Id, feed.FeedUrl, attempt, MaxFetchAttempts, delay.TotalSeconds, ex.Message);
+                await Task.Delay(delay, ct);
+            }
+        }
+    }
+
+    private static bool IsTransient(Exception ex, CancellationToken ct)
+    {
+        if (ct.IsCancellationRequested)
+        {
+            // Our own cancellation (shutdown/navigation), not a flaky server -- don't retry.
+            return false;
+        }
+
+        return ex switch
+        {
+            // With our token ruled out above, a TaskCanceledException is an HttpClient timeout.
+            TaskCanceledException => true,
+            HttpRequestException http => IsRetryableStatus(http.StatusCode),
+            // XmlException (malformed feed), oversize body, etc. won't fix themselves on retry.
+            _ => false,
+        };
+    }
+
+    private static bool IsRetryableStatus(HttpStatusCode? status) => status switch
+    {
+        null => true,                                   // transport/DNS failure -- no response at all
+        HttpStatusCode.RequestTimeout => true,          // 408
+        HttpStatusCode.TooManyRequests => true,         // 429
+        >= HttpStatusCode.InternalServerError => true,  // 5xx -- server-side, likely transient
+        _ => false,                                     // other 4xx (404/410/403...) -- permanent
+    };
 
     private static async Task<FeedRefreshResult> RecordFailureAsync(AppDbContext db, Feed feed, CancellationToken ct, string error)
     {
