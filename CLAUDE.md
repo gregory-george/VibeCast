@@ -5,7 +5,7 @@ Blazor Server site on Kestrel (loopback); the **browser is the renderer, the exe
 app**. UI state and logic live server-side. Subscribes to RSS/Atom feeds and YouTube
 channels and playlists.
 
-VibeCast is **shipped** (v1.0.2, all features built). This file is the durable context
+VibeCast is **shipped** (v1.0.3, all features built). This file is the durable context
 for *maintaining* it: the invariants that silently break the app if violated, and the
 behavioral rules that aren't obvious from any single file. It is the source of truth over
 older docs — `vibecast-requirements-and-build-plan.md` is the original design rationale,
