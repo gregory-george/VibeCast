@@ -249,7 +249,9 @@ else if (PlaybackService.PendingPlayError is { } pendingError)
             audioModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/audioPlayer.js");
             await audioModule.InvokeVoidAsync("init", audioElement, dotNetRef);
             await audioModule.InvokeVoidAsync("setSource", audioElement, current.MediaUrl, current.InitialPositionSeconds);
-            rssRate = Config.DefaultPlaybackSpeed;
+            // Snap to the closest selectable step so a config value that isn't an exact
+            // step (e.g. 1.75) still selects an option instead of showing a blank control.
+            rssRate = RssRates.OrderBy(r => Math.Abs(r - Config.DefaultPlaybackSpeed)).First();
             await audioModule.InvokeVoidAsync("setRate", audioElement, (double)rssRate);
         }
         else
