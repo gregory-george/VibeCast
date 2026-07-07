@@ -59,6 +59,12 @@ export function setCaptionsEnabled(enabled) {
     }
 }
 
+export function play() {
+    if (player) {
+        player.playVideo();
+    }
+}
+
 export function pause() {
     if (player) {
         player.pauseVideo();

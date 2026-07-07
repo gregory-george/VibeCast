@@ -168,6 +168,14 @@
     display: block;
 }
 
+.now-playing-divider {
+    align-self: stretch;
+    width: 1px;
+    margin: 0.15rem 0.25rem;
+    background: var(--vc-player-border);
+    flex-shrink: 0;
+}
+
 .now-playing-actions button:hover {
     background: var(--vc-player-border);
     border-color: var(--vc-player-accent);

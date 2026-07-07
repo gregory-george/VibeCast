@@ -79,6 +79,34 @@
         </div>
 
         <div class="now-playing-actions">
+            <button @onclick="() => SkipAsync(-1)" title="Back @Config.SkipSeconds s" aria-label="Back @Config.SkipSeconds seconds">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <polyline points="11 17 6 12 11 7" />
+                    <polyline points="18 17 13 12 18 7" />
+                </svg>
+            </button>
+            <button @onclick="TogglePlayPauseAsync" title="@(isPlaying ? "Pause" : "Play")" aria-label="@(isPlaying ? "Pause" : "Play")">
+                @if (isPlaying)
+                {
+                    <svg viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true">
+                        <rect x="6" y="5" width="4" height="14" rx="1" />
+                        <rect x="14" y="5" width="4" height="14" rx="1" />
+                    </svg>
+                }
+                else
+                {
+                    <svg viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true">
+                        <path d="M8 5v14l11-7z" />
+                    </svg>
+                }
+            </button>
+            <button @onclick="() => SkipAsync(1)" title="Forward @Config.SkipSeconds s" aria-label="Forward @Config.SkipSeconds seconds">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <polyline points="13 17 18 12 13 7" />
+                    <polyline points="6 17 11 12 6 7" />
+                </svg>
+            </button>
+            <span class="now-playing-divider" aria-hidden="true"></span>
             @if (current.IsVideo)
             {
                 <button @onclick="ToggleExpanded" title="@(isExpanded ? "Collapse" : "Expand")" aria-label="@(isExpanded ? "Collapse" : "Expand")">
@@ -154,6 +182,7 @@ else if (PlaybackService.PendingPlayError is { } pendingError)
     private ElementReference resizeHandleElement;
     private bool videoResizeActive;
     private bool skipListenerActive;
+    private bool isPlaying;
 
     protected override void OnInitialized() => PlaybackService.Changed += OnPlaybackChanged;
 
@@ -288,7 +317,9 @@ else if (PlaybackService.PendingPlayError is { } pendingError)
     }
 
     [JSInvokable]
-    public async Task OnSkipKeyPressed(int direction)
+    public Task OnSkipKeyPressed(int direction) => SkipAsync(direction);
+
+    private async Task SkipAsync(int direction)
     {
         if (PlaybackService.Current is not { } current)
         {
@@ -364,17 +395,72 @@ else if (PlaybackService.PendingPlayError is { } pendingError)
         }
     }
 
+    private async Task TogglePlayPauseAsync()
+    {
+        if (PlaybackService.Current is not { } current)
+        {
+            return;
+        }
+
+        if (current.IsRss)
+        {
+            if (audioModule is null)
+            {
+                return;
+            }
+
+            if (isPlaying)
+            {
+                await audioModule.InvokeVoidAsync("pause", audioElement);
+            }
+            else
+            {
+                await audioModule.InvokeVoidAsync("play", audioElement);
+            }
+        }
+        else
+        {
+            if (youtubeModule is null)
+            {
+                return;
+            }
+
+            if (isPlaying)
+            {
+                await youtubeModule.InvokeVoidAsync("pause");
+            }
+            else
+            {
+                await youtubeModule.InvokeVoidAsync("play");
+            }
+        }
+    }
+
     [JSInvokable]
     public Task OnEnded() => PlaybackService.HandlePlaybackEndedAsync(CancellationToken.None);
 
     [JSInvokable]
-    public Task OnPlayStateChanged(bool isPlaying) => Task.CompletedTask;
+    public Task OnPlayStateChanged(bool playing)
+    {
+        isPlaying = playing;
+        return InvokeAsync(StateHasChanged);
+    }
 
     private const int YouTubeStateEnded = 0;
+    private const int YouTubeStatePlaying = 1;
+    private const int YouTubeStatePaused = 2;
 
     [JSInvokable]
-    public Task OnYouTubeStateChange(int state) =>
-        state == YouTubeStateEnded ? PlaybackService.HandlePlaybackEndedAsync(CancellationToken.None) : Task.CompletedTask;
+    public Task OnYouTubeStateChange(int state)
+    {
+        if (state is YouTubeStatePlaying or YouTubeStatePaused or YouTubeStateEnded)
+        {
+            isPlaying = state == YouTubeStatePlaying;
+            StateHasChanged();
+        }
+
+        return state == YouTubeStateEnded ? PlaybackService.HandlePlaybackEndedAsync(CancellationToken.None) : Task.CompletedTask;
+    }
 
     private async Task SavePositionLoopAsync(CancellationToken ct)
     {
