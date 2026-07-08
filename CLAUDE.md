@@ -40,6 +40,11 @@ kept for history, not an active spec.
 - Console window is suppressed at runtime via `FreeConsole()` P/Invoke, **not**
   `OutputType=WinExe` — setting `WinExe` breaks the SDK's static-web-asset / Razor JS
   pipeline (`blazor.web.js` 404s, no interactivity). Don't "fix" this back to `WinExe`.
+- Tests: `dotnet test` (`tests/VibeCast.Tests`, xUnit, same `net10.0-windows` TFM). The
+  app grants it `InternalsVisibleTo` — keep types `internal sealed`, never widen
+  visibility for testability. Downloader integration tests run EF against SQLite
+  in-memory; `FeedRefreshService` takes an injectable retry-delay `Func` so retry tests
+  don't sleep real seconds — keep delays injectable in new retrying code.
 
 ## Hard rules — do not break these
 
@@ -57,8 +62,10 @@ These are the things that silently break the app if violated.
   port for *this* run) and `config.json` (sticky preference for next run).
 - The single-instance relaunch path reads the live port from **`run.lock`** — **never
   assume `5123`.** Treat `run.lock` as potentially **stale** (prior run crashed without
-  removing it): validate the port is actually live (TCP connect) before using it; if not,
-  fall through to a fresh launch.
+  removing it): validate the port is actually live (TCP connect) before opening a browser
+  against it. If it isn't live, the second process just exits — the running instance opens
+  its own tab once bound, and a stale file from a crashed run is overwritten on the next
+  fresh launch.
 - The single-instance `Mutex` is a **local, non-abandoned** mutex held for the full
   process lifetime.
 
@@ -67,6 +74,11 @@ These are the things that silently break the app if violated.
   `AppHost/AppPaths`) **/ `Environment.ProcessPath`.**
 - **Never use `Assembly.Location`** — it's empty under single-file publish.
 - **Never write to `%AppData%`.** The folder is the entire app.
+- **All `config.json` access goes through `AppHost/AppConfig.Load()/Save()`** — a static
+  lock serializes readers/writers (circuits, the player resize handle, and host startup
+  all save concurrently) and `Save` is an atomic temp-file + move, so a crash can't
+  truncate the file. A corrupt/unreadable config falls back to defaults rather than
+  failing startup. `AppConfig` is also the catalog of every user setting and its default.
 
 **Database**
 - WAL mode; **WAL checkpoint on shutdown** (`PRAGMA wal_checkpoint(TRUNCATE)`).
@@ -91,8 +103,13 @@ These are the things that silently break the app if violated.
   **raw** HTML; sanitize at render time, never store sanitized.
 - **Derive each download's filename and extension from the enclosure's media type — never
   from the URL or any feed-supplied name** (`Downloads/DownloadFileNaming`). Prevents a
-  feed landing a `.exe`/`.bat` in `downloads/` that later gets `ShellExecute`d. The media
-  endpoint serves files with the stored `EnclosureMediaType`.
+  feed landing a `.exe`/`.bat` in `downloads/` that later gets `ShellExecute`d. Unknown
+  media types get `.bin` (safe, never executable). The media endpoint serves files with
+  the stored `EnclosureMediaType`.
+- **Feed fetches stream through a hard 20 MB cap** (`Feeds/FeedFetcher`) — reject, never
+  buffer unbounded, whether or not the server declares a Content-Length. Parsing loads
+  `XDocument` from the raw bytes (the XML declaration's own encoding is honored) with DTD
+  processing prohibited — no XXE / billion-laughs.
 
 ## Data model invariants
 
@@ -114,6 +131,19 @@ These are the things that silently break the app if violated.
 
 ## Behavioral invariants
 
+- **Launch sequence:** refresh-on-open (`RefreshOnOpen`, default **on**) refreshes all
+  feeds fire-and-forget, and a **startup download sweep** re-queues RSS enclosures that
+  should be on disk but aren't — downloads interrupted by a prior exit resume from their
+  `.partial` file via Range. The sweep is gated by the same `AutoDownloadGate` as ingest,
+  so items past the age cutoff stay skipped. Logs older than 30 days are pruned
+  (`Logging/LogRetention`, keyed off the date in the filename). First run only
+  (`config.json` doesn't exist yet): offer to create a desktop shortcut, once ever.
+- **Refresh is concurrent but bounded** (4 feeds at a time — WAL is single-writer; the
+  30 s busy timeout absorbs the write contention). Each fetch retries **transient**
+  failures only (timeout / 408 / 429 / 5xx / transport; 3 attempts, exponential backoff) —
+  other 4xx and parse errors don't retry. Failures are recorded per feed
+  (`LastRefreshError`, cleared on success) and surfaced on the Feeds page; cancellation
+  from shutdown/navigation is never recorded as a feed failure.
 - **Initial subscribe (RSS):** only the newest `InitialActiveEpisodeCount` (default **15**)
   episodes stay active; older back-catalog items are **pre-archived** (`played + archived`)
   at ingest so auto-download-all doesn't flood disk on a deep feed on day one. YouTube is
@@ -134,6 +164,8 @@ These are the things that silently break the app if violated.
   Cleanup runs on refresh (per feed) and on shutdown (all feeds).
 - **Downloads:** auto-download all new by default (per-feed `AutoDownloadEnabled`
   override). **RSS enclosures only** — YouTube always streams and is **never** downloaded.
+  `ConcurrentDownloadLimit` (default **1**) sets how many workers drain the queue; read
+  once at startup.
 - **90-day auto-download cutoff** (`DefaultAutoDownloadMaxAgeDays` default **90**, per-feed
   `AutoDownloadMaxAgeDays`; `null` = no limit). Evaluated at **ingest/refresh** against
   pubdate (unknown date → treat as **today**). An item that ages past the cutoff while
@@ -142,7 +174,10 @@ These are the things that silently break the app if violated.
 - **Range-resume:** the downloader always re-requests the **original enclosure URL** (never
   a cached redirect target), so a resume naturally **re-resolves through redirector chains**
   (podtrac/op3/chartable sign short-lived URLs). If a resume request returns `200` instead
-  of `206`, **restart from zero**.
+  of `206`, **restart from zero**. Downloads deliberately have **no overall HTTP timeout**
+  (a large enclosure legitimately outlives any fixed limit); instead a 30 s connect
+  timeout, a **100 s per-read stall window**, and a truncation check (fewer bytes than
+  Content-Length ⇒ fail, keep the `.partial` for the next resume) guard the stream.
 - **In-app player is the default.** RSS audio/video play in an HTML5 `<audio>`/`<video>`
   element fed by the loopback media endpoint `/media/episodes/{id}`, which serves the local
   file with ASP.NET Core `enableRangeProcessing` (seek/scrub). YouTube plays via the
@@ -150,18 +185,25 @@ These are the things that silently break the app if violated.
   navigation between feeds/episodes.
 - **RSS plays a local file — download-first.** Hitting play on an undownloaded RSS episode
   **queues the download and plays the local file when ready** — no direct-from-URL
-  streaming. The file must exist on disk to play; this is why mark-as-played deletion is
-  tied to playback **completion**, not open.
+  streaming. If that download fails or is canceled, the pending-play state clears and the
+  error is surfaced — never a "plays when ready" banner waiting forever. The file must
+  exist on disk to play; that's why auto-mark-on-completion (`AutoMarkOnCompletion`,
+  default **off**) fires at playback **completion**, never on open — mark-as-played
+  deletes the file.
 - **Playback speed:** RSS exposes a full **1.0–3.0 in 0.1 steps** control (HTML5
   `playbackRate` with `preservesPitch = true`). YouTube is capped to its **native
   0.25–2.0 / 0.25 menu** — surface YouTube's stepped control honestly; never fake 0.1
-  granularity or 3x it can't honor. (Keyboard skip is `SkipSeconds`, default 10; YouTube
-  captions default on, RSS has none.)
+  granularity or 3x it can't honor. `DefaultPlaybackSpeed` seeds each newly-opened episode
+  and snaps to the nearest step the active player actually offers. (Keyboard skip is
+  `SkipSeconds`, default 10; YouTube captions default on, RSS has none.)
 - **External handoff is the fallback, not the default.** An "Open in external app" action
   uses `Process.Start(new ProcessStartInfo(target) { UseShellExecute = true })`: RSS hands
   the **local file** to the default app; YouTube opens the **plain
   `https://www.youtube.com/watch?v=VIDEO_ID`** URL in the default browser — no params, no
   embed. Escape hatch for codecs the browser's HTML5 engine can't play.
+- **OPML:** export is a loopback endpoint (`GET /opml/export`); import runs in-browser
+  (Settings → file upload) through the normal add-feed path, so duplicate detection and
+  per-feed defaults apply.
 - **Tray on by default:** running indicator + **Quit** (clean `StopApplication()`; confirm
   if a download is mid-flight, then cancel it — not a force-kill; a ~10 s watchdog hard-exits
   only if graceful shutdown hangs) + **Reopen UI** (opens the live port).
@@ -196,6 +238,9 @@ These are the things that silently break the app if violated.
   `media:` namespaces (`Feeds/FeedDocumentParser`).
 - Extract per episode: GUID/id, title, publish date, enclosure URL + media type, duration,
   description (HTML), artwork, and (YouTube) the `watch?v=` video ID.
+- All outbound HTTP (feed fetches, page scrapes, downloads) sends a desktop-Chrome
+  **browser User-Agent** (`HostRunner`) — stock `HttpClient` UAs get blocked by some
+  hosts, YouTube scrapes especially.
 
 ## Code style (established conventions)
 
@@ -210,7 +255,8 @@ These are the things that silently break the app if violated.
 
 ## Out of scope — do not build (v1)
 
-Background/overnight refresh or downloads · cross-device/cloud sync · authenticated-feed
+Background/scheduled refresh or downloads (the launch-time refresh-on-open and download
+sweep are the deliberate extent of automation) · cross-device/cloud sync · authenticated-feed
 UI / HTTP Basic auth (token-in-URL feeds work incidentally) · podcast **chapters** (still
 deferred even with the in-app player) · podcast directory search (add-by-URL + OPML only) ·
 arm64 · native toast notifications · mobile.
@@ -228,7 +274,7 @@ VibeCast/
 │  ├─ podcasts-yyyyMMdd.db.bak
 │  └─ config-yyyyMMdd.json.bak
 ├─ downloads/<feed-slug>/<episode-file>   # RSS enclosures + per-feed cover art
-└─ logs/vibecast-YYYYMMDD.log
+└─ logs/vibecast-YYYYMMDD.log             # daily log, pruned after 30 days
 ```
 
 ## Glossary
