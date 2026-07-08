@@ -27,6 +27,15 @@ internal sealed class Episode
 
     public int? DurationSeconds { get; set; }
 
+    /// <summary>
+    /// YouTube only. Set when the video is a scheduled premiere/live stream that hasn't
+    /// aired yet (its watch page reports lengthSeconds=0 and a scheduledStartTime). Null
+    /// for RSS, for aired videos, and once a re-scrape after airing lands a real duration.
+    /// Drives the "Upcoming" indicator; a non-null value with a null DurationSeconds means
+    /// the item is still awaiting air.
+    /// </summary>
+    public DateTime? ScheduledStartUtc { get; set; }
+
     /// <summary>RSS only.</summary>
     public string? EnclosureUrl { get; set; }
 

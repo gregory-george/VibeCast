@@ -142,11 +142,13 @@ internal sealed class FeedRefreshService(
 
         await artworkService.EnsureArtworkAsync(feed.Id, ct);
 
-        if (feed.Type == FeedType.YouTube && newEpisodes.Count > 0)
+        if (feed.Type == FeedType.YouTube)
         {
-            // videos.xml carries no duration; backfill only the newly-added
-            // episodes by scraping each watch page (best-effort, never throws).
-            await youTubeDurationService.BackfillAsync(newEpisodes, ct);
+            // videos.xml carries no duration; scrape each watch page (best-effort, never
+            // throws). Covers newly-added episodes and re-visits recent ones still missing
+            // a duration -- notably premieres that reported length 0 before airing, which
+            // pick up a real duration and shed their "upcoming" scheduled-start once live.
+            await youTubeDurationService.BackfillFeedAsync(feed.Id, ct);
         }
 
         var feedTitle = feed.Title ?? feed.OriginalUrl;

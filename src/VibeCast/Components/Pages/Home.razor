@@ -87,9 +87,13 @@
                             {
                                 <span class="shorts-badge" title="YouTube Short">Short</span>
                             }
+                            @if (episode.ScheduledStartUtc is not null)
+                            {
+                                <span class="upcoming-badge" title="@UpcomingTooltip(episode.ScheduledStartUtc)">Upcoming</span>
+                            }
                         </div>
                         <div class="episode-meta">
-                            @episode.FeedTitle &middot; @episode.PublishedAtUtc.ToLocalTime().ToString("MMM d, yyyy") &middot; @FormatDuration(episode.DurationSeconds) &middot; @FormatFileSize(episode.FileSizeBytes)
+                            @episode.FeedTitle &middot; @episode.PublishedAtUtc.ToLocalTime().ToString("MMM d, yyyy") &middot; @FormatDurationOrSchedule(episode.DurationSeconds, episode.ScheduledStartUtc) &middot; @FormatFileSize(episode.FileSizeBytes)
                         </div>
                     </li>
                 }
@@ -110,9 +114,13 @@
                 {
                     <span class="shorts-badge" title="YouTube Short">Short</span>
                 }
+                @if (detail.ScheduledStartUtc is not null)
+                {
+                    <span class="upcoming-badge" title="@UpcomingTooltip(detail.ScheduledStartUtc)">Upcoming</span>
+                }
             </h2>
             <p class="episode-meta">
-                @detail.FeedTitle &middot; @detail.PublishedAtUtc.ToLocalTime().ToString("MMM d, yyyy") &middot; @FormatDuration(detail.DurationSeconds) &middot; @FormatFileSize(detail.FileSizeBytes)
+                @detail.FeedTitle &middot; @detail.PublishedAtUtc.ToLocalTime().ToString("MMM d, yyyy") &middot; @FormatDurationOrSchedule(detail.DurationSeconds, detail.ScheduledStartUtc) &middot; @FormatFileSize(detail.FileSizeBytes)
             </p>
 
             <p>
@@ -200,6 +208,7 @@
                 FeedTitle = e.Feed.Title ?? e.Feed.OriginalUrl,
                 e.PublishedAtUtc,
                 e.DurationSeconds,
+                e.ScheduledStartUtc,
                 IsShort = e.EnclosureUrl == null && e.DurationSeconds != null && e.DurationSeconds <= 300,
                 FeedSlug = e.Feed.Slug,
                 e.DownloadedFileName,
@@ -208,7 +217,7 @@
             .ToListAsync(cts.Token);
 
         episodes = rows
-            .Select(r => new EpisodeListItem(r.Id, r.Title, r.FeedTitle, r.PublishedAtUtc, r.DurationSeconds, r.IsShort, GetFileSize(r.FeedSlug, r.DownloadedFileName)))
+            .Select(r => new EpisodeListItem(r.Id, r.Title, r.FeedTitle, r.PublishedAtUtc, r.DurationSeconds, r.ScheduledStartUtc, r.IsShort, GetFileSize(r.FeedSlug, r.DownloadedFileName)))
             .ToList();
     }
 
@@ -261,6 +270,7 @@
                 FeedTitle = e.Feed.Title ?? e.Feed.OriginalUrl,
                 e.PublishedAtUtc,
                 e.DurationSeconds,
+                e.ScheduledStartUtc,
                 e.DescriptionHtml,
                 e.IsPlayed,
                 e.IsArchived,
@@ -274,7 +284,7 @@
 
         detail = row is null
             ? null
-            : new EpisodeDetail(row.Id, row.Title, row.FeedTitle, row.PublishedAtUtc, row.DurationSeconds, row.DescriptionHtml, row.IsPlayed, row.IsArchived, row.IsRss, row.IsShort, row.IsDownloaded, GetFileSize(row.FeedSlug, row.DownloadedFileName));
+            : new EpisodeDetail(row.Id, row.Title, row.FeedTitle, row.PublishedAtUtc, row.DurationSeconds, row.ScheduledStartUtc, row.DescriptionHtml, row.IsPlayed, row.IsArchived, row.IsRss, row.IsShort, row.IsDownloaded, GetFileSize(row.FeedSlug, row.DownloadedFileName));
     }
 
     private string GetDownloadStatusText(EpisodeDetail current)
@@ -363,6 +373,18 @@
         return span.TotalHours >= 1 ? span.ToString(@"h\:mm\:ss") : span.ToString(@"m\:ss");
     }
 
+    // An unaired YouTube premiere has no real duration yet; show its scheduled air date
+    // in the meta line in place of a "0:00" that would never be accurate.
+    private static string FormatDurationOrSchedule(int? seconds, DateTime? scheduledStartUtc) =>
+        scheduledStartUtc is { } start
+            ? $"Airs {start.ToLocalTime():MMM d, yyyy}"
+            : FormatDuration(seconds);
+
+    private static string UpcomingTooltip(DateTime? scheduledStartUtc) =>
+        scheduledStartUtc is { } start
+            ? $"Scheduled premiere — airs {start.ToLocalTime():MMM d, yyyy h:mm tt}"
+            : "Scheduled premiere";
+
     private static long? GetFileSize(string feedSlug, string? downloadedFileName)
     {
         if (downloadedFileName is null)
@@ -403,7 +425,7 @@
 
     private sealed record FeedSummary(int Id, string Title, int ActiveCount, bool HasArtwork);
 
-    private sealed record EpisodeListItem(int Id, string Title, string FeedTitle, DateTime PublishedAtUtc, int? DurationSeconds, bool IsShort, long? FileSizeBytes);
+    private sealed record EpisodeListItem(int Id, string Title, string FeedTitle, DateTime PublishedAtUtc, int? DurationSeconds, DateTime? ScheduledStartUtc, bool IsShort, long? FileSizeBytes);
 
-    private sealed record EpisodeDetail(int Id, string Title, string FeedTitle, DateTime PublishedAtUtc, int? DurationSeconds, string? DescriptionHtml, bool IsPlayed, bool IsArchived, bool IsRss, bool IsShort, bool IsDownloaded, long? FileSizeBytes);
+    private sealed record EpisodeDetail(int Id, string Title, string FeedTitle, DateTime PublishedAtUtc, int? DurationSeconds, DateTime? ScheduledStartUtc, string? DescriptionHtml, bool IsPlayed, bool IsArchived, bool IsRss, bool IsShort, bool IsDownloaded, long? FileSizeBytes);
 }

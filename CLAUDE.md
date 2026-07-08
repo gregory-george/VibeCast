@@ -229,6 +229,15 @@ These are the things that silently break the app if violated.
   (`Feeds/YouTubeDurationService`). It also carries no channel-level artwork — the cover is
   scraped from the channel/playlist page (`Feeds/YouTubeChannelResolver`,
   `Feeds/FeedArtworkService`).
+- **Scheduled premieres/live streams** appear in `videos.xml` before they air but their
+  watch page reports `lengthSeconds:"0"`. That zero is treated as **unknown, not a real
+  zero-length episode** — the duration stays `null` and the page's `scheduledStartTime` is
+  stored in **`Episode.ScheduledStartUtc`** (drives the "Upcoming" badge; a non-null value
+  with null duration = not yet aired). The refresh path re-scrapes recent YouTube episodes
+  still missing a duration (`BackfillFeedAsync`, bounded to a 45-day pubdate window), so the
+  real length lands once the video airs and the scheduled-start clears. Don't skip these
+  items at ingest — the ~15-item feed window means a premiere can age out **before** it airs
+  and the additive model can't recover it.
 - Feeds return only ~15 most recent items (incl. `UULF`); the additive model keeps seen
   items but **cannot** recover a pre-subscription back catalog.
 

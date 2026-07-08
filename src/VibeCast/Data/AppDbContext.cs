@@ -35,6 +35,7 @@ internal sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbC
         modelBuilder.Entity<Episode>(episode =>
         {
             episode.Property(e => e.PublishedAtUtc).HasConversion(utcDateTimeConverter);
+            episode.Property(e => e.ScheduledStartUtc).HasConversion(utcDateTimeConverter);
 
             // The composite de-dup key: scoped per feed, so the same GUID/video ID
             // appearing in two feeds stays distinct. Also the additive-refresh guard
