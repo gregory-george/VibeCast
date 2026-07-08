@@ -64,3 +64,5 @@ if ($robocopyExit -ge 8) {
 }
 
 Write-Host "VibeCast published and copied to $Destination" -ForegroundColor Green
+
+pause
