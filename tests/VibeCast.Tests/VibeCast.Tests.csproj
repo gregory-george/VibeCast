@@ -7,6 +7,11 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <IsPackable>false</IsPackable>
     <UseWindowsForms>true</UseWindowsForms>
+    <!-- The app under test pins RuntimeIdentifier=win-x64 (Windows x64 only). Without a
+         matching RID here, a RID-less `dotnet test` copies down a VibeCast.dll the test
+         host can't load ("Could not load file or assembly 'VibeCast'"). Pinning the same
+         RID keeps plain `dotnet test` working. -->
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
   </PropertyGroup>
 
   <ItemGroup>
