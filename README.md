@@ -3,7 +3,8 @@
 A portable, single-folder podcast client for Windows. Double-click `VibeCast.exe` and
 it opens in your default browser — the `.exe` is a self-contained backend (Blazor
 Server on Kestrel, loopback-only); the browser is just the renderer. Subscribes to
-RSS/Atom podcast feeds and YouTube channels.
+RSS/Atom podcast feeds and YouTube channels/playlists. Windows x64 only, no install
+required.
 
 ## Running it
 
@@ -20,14 +21,15 @@ menu entry.
 
 ```
 VibeCast/
-├─ VibeCast.exe          # backend + launcher
-├─ wwwroot/               # static web assets (present in self-contained builds)
-├─ config.json            # settings, including the sticky port preference
+├─ VibeCast.exe            # backend + launcher
+├─ wwwroot/                # static web assets (present in self-contained builds)
+├─ config.json             # settings, including the sticky port preference
 ├─ run.lock                # live port for the current run (present only while running)
 ├─ podcasts.db             # SQLite: feeds, episodes, state, archive
-├─ backups/                # timestamped pre-migration backups, last 10 kept
-│  └─ podcasts-yyyyMMddHHmmss.db.bak
-├─ downloads/<feed-slug>/  # downloaded RSS enclosures
+├─ backups/                # once-per-day pre-migration backups, last 10 of each kept
+│  ├─ podcasts-yyyyMMdd.db.bak
+│  └─ config-yyyyMMdd.json.bak
+├─ downloads/<feed-slug>/  # downloaded RSS enclosures + per-feed cover art
 └─ logs/vibecast-YYYYMMDD.log
 ```
 
@@ -37,10 +39,12 @@ state only). There's no separate backup format.
 
 ## Settings
 
-In-app at `/settings`: port, tray on/off, shutdown grace window, refresh-on-open,
-concurrent downloads, default auto-download cutoff, default Shorts exclusion,
-default keep-last-N retention, default playback speed, auto-mark-on-completion, and
-OPML import/export (subscription list only — not a full backup, see above).
+In-app at `/settings`: port, tray on/off, shutdown grace window, theme (light/dark/
+system), refresh-on-open, concurrent downloads, default auto-download cutoff, default
+Shorts exclusion, episodes left active on new RSS subscriptions, default keep-last-N
+retention, default playback speed, skip-seconds, closed captions default,
+auto-mark-on-completion, and OPML import/export (subscription list only — not a full
+backup, see above).
 
 ## Updating
 
@@ -54,8 +58,8 @@ hand:
    the folder, overwriting the old one.
 3. Leave `config.json`, `podcasts.db`, `downloads/`, and `logs/` in place — they're
    your data, untouched by the swap. The app auto-migrates the database on next
-   launch (backing it up to `backups/podcasts-yyyyMMddHHmmss.db.bak` first, keeping
-   the last 10).
+   launch, backing up `podcasts.db` and `config.json` to `backups/` first (once per
+   calendar day, keeping the last 10 of each).
 4. Relaunch.
 
 ## Building a release
@@ -70,4 +74,8 @@ aren't embedded into the single file). Copy that whole output folder to ship —
 the "folder is the entire app" unit described above, just without `config.json`/
 `podcasts.db`/etc. yet, since those are created on first run.
 
-Windows x64 only
+Windows x64 only — no arm64 build.
+
+## License
+
+[MIT](LICENSE)
