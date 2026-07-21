@@ -5,7 +5,7 @@ Blazor Server site on Kestrel (loopback); the **browser is the renderer, the exe
 app**. UI state and logic live server-side. Subscribes to RSS/Atom feeds and to YouTube
 channels and playlists.
 
-VibeCast is **shipped** (v1.0.5, all features built). This file is the durable context for
+VibeCast is **shipped** (all features built). This file is the durable context for
 *maintaining* it: the invariants that silently break the app if violated, and the
 behavioral rules that aren't obvious from any single file. It is the source of truth over
 older docs — `vibecast-requirements-and-build-plan.md` is the original design rationale,
@@ -64,9 +64,11 @@ kept for history, not an active spec.
 
 ## Source layout (namespaces mirror folders)
 
-- **`AppHost/`** — process bootstrap: `Program` (STA/tray thread), `HostRunner` (background
-  host thread, DI wiring, launch sequence), `PortBinder`, `RunLock`, `SingleInstance`,
-  `AppConfig`, `AppPaths`, `TrayApplicationContext`, `DesktopShortcut`.
+- **`Program.cs`** (project root, namespace `VibeCast`) — the STA/tray **entry point**
+  (`Main`): the sole file outside a subfolder. Everything below is foldered.
+- **`AppHost/`** — process bootstrap: `HostRunner` (background host thread, DI wiring,
+  launch sequence), `PortBinder`, `RunLock`, `SingleInstance`, `AppConfig`, `AppPaths`,
+  `TrayApplicationContext`, `DesktopShortcut`.
 - **`Data/`** — EF Core: `AppDbContext`, entities (`Feed`, `Episode`, `FeedType`),
   `DatabaseLifecycle` (backup + migrate + checkpoint), `AppDbContextFactory` (design-time,
   for the `dotnet ef` CLI only), `Migrations/`.
@@ -137,7 +139,7 @@ These are the things that silently break the app if violated.
 - EF migrations **auto-apply on startup**. Immediately before, a **once-per-calendar-day**
   backup copies `podcasts.db → backups/podcasts-yyyyMMdd.db.bak` **and** `config.json →
   backups/config-yyyyMMdd.json.bak` (skipped if today's already exists), keeping only the
-  **last 10 of each** (oldest pruned automatically).
+  **last 10 of each**.
 
 **Untrusted input (feeds are hostile)**
 - **Always sanitize show-note HTML before rendering** (`Episodes/ShowNotesSanitizer`, built on
