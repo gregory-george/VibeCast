@@ -38,12 +38,12 @@
                 {
                     <li>
                         <button class="@(selectedFeedId == feed.Id ? "selected" : null)" @onclick="() => SelectFeedAsync(feed.Id)">
-                            <span class="feed-name">
+                            <span class="feed-name" title="@feed.Title">
                                 @if (feed.HasArtwork)
                                 {
                                     <img class="feed-art" src="/media/feeds/@(feed.Id)/artwork" alt="" />
                                 }
-                                @feed.Title
+                                <span class="feed-title-text">@feed.Title</span>
                             </span>
                             <span class="feed-metrics">
                                 <span class="feed-time" title="Total time of new episodes">@FormatTotalTime(feed.UnplayedSeconds)</span>

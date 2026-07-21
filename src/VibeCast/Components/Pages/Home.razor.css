@@ -98,6 +98,11 @@
         gap: 0.45rem;
         min-width: 0;
         overflow: hidden;
+    }
+
+    .feed-sidebar .feed-title-text {
+        min-width: 0;
+        overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
     }
