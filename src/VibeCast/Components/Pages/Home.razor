@@ -22,7 +22,8 @@
         <ul>
             <li>
                 <button class="@(selectedFeedId is null ? "selected" : null)" @onclick="() => SelectFeedAsync(null)">
-                    All feeds
+                    <span class="feed-name">All feeds</span>
+                    <span class="feed-time" title="Total time of new episodes">@FormatTotalTime(feeds?.Sum(f => f.UnplayedSeconds) ?? 0)</span>
                 </button>
             </li>
             <li class="feed-filter">
@@ -44,7 +45,10 @@
                                 }
                                 @feed.Title
                             </span>
-                            <span class="count">@feed.ActiveCount</span>
+                            <span class="feed-metrics">
+                                <span class="feed-time" title="Total time of new episodes">@FormatTotalTime(feed.UnplayedSeconds)</span>
+                                <span class="count">@feed.ActiveCount</span>
+                            </span>
                         </button>
                     </li>
                 }
@@ -182,7 +186,12 @@
         await using var db = await DbContextFactory.CreateDbContextAsync(cts.Token);
         feeds = await db.Feeds
             .OrderBy(f => f.Title)
-            .Select(f => new FeedSummary(f.Id, f.Title ?? f.OriginalUrl, f.Episodes.Count(e => !e.IsArchived), f.ArtworkFileName != null))
+            .Select(f => new FeedSummary(
+                f.Id,
+                f.Title ?? f.OriginalUrl,
+                f.Episodes.Count(e => !e.IsArchived),
+                f.Episodes.Where(e => !e.IsArchived).Sum(e => e.DurationSeconds) ?? 0,
+                f.ArtworkFileName != null))
             .ToListAsync(cts.Token);
     }
 
@@ -380,6 +389,14 @@
             ? $"Airs {start.ToLocalTime():MMM d, yyyy}"
             : FormatDuration(seconds);
 
+    // Total listening time of the active (new/unplayed) episodes, shown next to each feed
+    // and the "All feeds" entry. Always "xh xm" so it aligns column-wise in the sidebar.
+    private static string FormatTotalTime(long seconds)
+    {
+        var totalMinutes = (long)Math.Round(seconds / 60.0, MidpointRounding.AwayFromZero);
+        return $"{totalMinutes / 60}h {totalMinutes % 60}m";
+    }
+
     private static string UpcomingTooltip(DateTime? scheduledStartUtc) =>
         scheduledStartUtc is { } start
             ? $"Scheduled premiere — airs {start.ToLocalTime():MMM d, yyyy h:mm tt}"
@@ -423,7 +440,7 @@
         cts.Dispose();
     }
 
-    private sealed record FeedSummary(int Id, string Title, int ActiveCount, bool HasArtwork);
+    private sealed record FeedSummary(int Id, string Title, int ActiveCount, long UnplayedSeconds, bool HasArtwork);
 
     private sealed record EpisodeListItem(int Id, string Title, string FeedTitle, DateTime PublishedAtUtc, int? DurationSeconds, DateTime? ScheduledStartUtc, bool IsShort, long? FileSizeBytes);
 

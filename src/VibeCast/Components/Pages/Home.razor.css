@@ -73,6 +73,25 @@
         color: var(--vc-accent);
     }
 
+    .feed-sidebar .feed-metrics {
+        display: flex;
+        align-items: baseline;
+        gap: 0.5rem;
+        flex-shrink: 0;
+    }
+
+    .feed-sidebar .feed-time {
+        color: var(--vc-text-faint);
+        font-size: 0.75rem;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+
+    .feed-sidebar button.selected .feed-time {
+        color: var(--vc-accent);
+    }
+
     .feed-sidebar .feed-name {
         display: flex;
         align-items: center;
