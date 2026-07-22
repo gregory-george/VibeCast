@@ -23,7 +23,10 @@
             <li>
                 <button class="@(selectedFeedId is null ? "selected" : null)" @onclick="() => SelectFeedAsync(null)">
                     <span class="feed-name">All feeds</span>
-                    <span class="feed-time" title="Total time of new episodes">@FormatTotalTime(feeds?.Sum(f => f.UnplayedSeconds) ?? 0)</span>
+                    <span class="feed-metrics">
+                        <span class="feed-time" title="Total time of new episodes">@FormatTotalTime(feeds?.Sum(f => f.UnplayedSeconds) ?? 0)</span>
+                        <span class="count">@(feeds?.Sum(f => f.ActiveCount) ?? 0)</span>
+                    </span>
                 </button>
             </li>
             <li class="feed-filter">
