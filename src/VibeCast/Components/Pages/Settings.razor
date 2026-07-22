@@ -11,152 +11,202 @@
 
 <PageTitle>Settings - VibeCast</PageTitle>
 
-<div class="page">
+<div class="page settings-page">
 
 <h1>Settings</h1>
 
 <p><a href="/">&larr; Back to library</a></p>
 
-<section>
+<nav class="settings-nav">
+    <a href="/settings#general">General</a>
+    <a href="/settings#refresh">Refresh &amp; downloads</a>
+    <a href="/settings#retention">Retention</a>
+    <a href="/settings#playback">Playback</a>
+    <a href="/settings#opml">OPML</a>
+    <a href="/settings#about">About</a>
+</nav>
+
+<section id="general">
     <h2>General</h2>
-    <p>
-        <label>
-            Preferred port
-            <input type="number" min="1" max="65535" style="width: 6rem;" value="@Config.PreferredPort" @onchange="UpdatePreferredPortAsync" />
-        </label>
-        &mdash; takes effect next launch; this run is on port @LivePort.
-    </p>
-    <p>
-        <label>
-            <input type="checkbox" checked="@Config.TrayEnabled" @onchange="e => SaveBoolAsync(v => Config.TrayEnabled = v, e)" />
-            Show tray icon
-        </label>
-    </p>
-    <p>
-        <label>
-            Shutdown grace window (seconds)
-            <input type="number" min="1" max="600" style="width: 6rem;" value="@Config.GraceWindowSeconds" @onchange="UpdateGraceWindowAsync" />
-        </label>
-        &mdash; how long VibeCast waits with no open tabs before exiting; restarts the wait on reconnect. Takes effect next launch.
-    </p>
-    <p>
-        <label>
-            Theme
-            <select value="@Config.Theme" @onchange="UpdateThemeAsync">
+    <div class="settings-card">
+        <div class="setting-row">
+            <div class="setting-info">
+                <label for="preferred-port">Preferred port</label>
+                <div class="setting-hint">Takes effect next launch; this run is on port @LivePort.</div>
+            </div>
+            @SavedFlash("port")
+            <input id="preferred-port" type="number" min="1" max="65535" class="setting-num" value="@Config.PreferredPort" @onchange="UpdatePreferredPortAsync" />
+        </div>
+        <div class="setting-row">
+            <div class="setting-info">
+                <label for="tray-enabled">Show tray icon</label>
+            </div>
+            @SavedFlash("tray")
+            <input id="tray-enabled" type="checkbox" class="toggle" checked="@Config.TrayEnabled" @onchange='e => SaveBoolAsync("tray", v => Config.TrayEnabled = v, e)' />
+        </div>
+        <div class="setting-row">
+            <div class="setting-info">
+                <label for="grace-window">Shutdown grace window (seconds)</label>
+                <div class="setting-hint">How long VibeCast waits with no open tabs before exiting; restarts the wait on reconnect. Takes effect next launch.</div>
+            </div>
+            @SavedFlash("grace")
+            <input id="grace-window" type="number" min="1" max="600" class="setting-num" value="@Config.GraceWindowSeconds" @onchange="UpdateGraceWindowAsync" />
+        </div>
+        <div class="setting-row">
+            <div class="setting-info">
+                <label for="theme-select">Theme</label>
+            </div>
+            @SavedFlash("theme")
+            <select id="theme-select" value="@Config.Theme" @onchange="UpdateThemeAsync">
                 <option value="System">System default</option>
                 <option value="Light">Light</option>
                 <option value="Dark">Dark</option>
             </select>
-        </label>
-    </p>
+        </div>
+    </div>
 </section>
 
-<section>
+<section id="refresh">
     <h2>Refresh &amp; downloads</h2>
-    <p>
-        <label>
-            <input type="checkbox" checked="@Config.RefreshOnOpen" @onchange="e => SaveBoolAsync(v => Config.RefreshOnOpen = v, e)" />
-            Refresh all feeds automatically when VibeCast opens
-        </label>
-    </p>
-    <p>
-        <label>
-            Auto-refresh interval (minutes)
-            <input type="number" min="@PeriodicFeedRefreshService.MinIntervalMinutes" max="@PeriodicFeedRefreshService.MaxIntervalMinutes" style="width: 6rem;" value="@Config.AutoRefreshIntervalMinutes" @onchange="UpdateAutoRefreshIntervalAsync" />
-        </label>
-        &mdash; how often all feeds refresh in the background while VibeCast is running (30&ndash;180); a change applies after the current interval elapses.
-    </p>
-    <p>
-        <label>
-            Concurrent downloads
-            <input type="number" min="1" max="10" style="width: 5rem;" value="@Config.ConcurrentDownloadLimit" @onchange="UpdateConcurrencyAsync" />
-        </label>
-        &mdash; takes effect next launch.
-    </p>
-    <p>
-        <label>
-            Default auto-download cutoff (days)
-            <input type="number" min="0" style="width: 6rem;" value="@Config.DefaultAutoDownloadMaxAgeDays" @onchange="UpdateMaxAgeAsync" />
-        </label>
-        &mdash; applies to newly-added feeds; existing feeds keep their own setting.
-    </p>
-    <p>
-        <label>
-            <input type="checkbox" checked="@Config.DefaultExcludeShorts" @onchange="e => SaveBoolAsync(v => Config.DefaultExcludeShorts = v, e)" />
-            Exclude Shorts by default for new YouTube subscriptions
-        </label>
-    </p>
-    <p>
-        <label>
-            Episodes left active when subscribing to a new RSS feed
-            <input type="number" min="0" style="width: 6rem;" value="@Config.InitialActiveEpisodeCount" @onchange="UpdateInitialActiveEpisodeCountAsync" />
-        </label>
-        &mdash; the rest of the back catalog is pre-archived so a long-running feed doesn't flood downloads on day one. Doesn't apply to YouTube (its feed already returns only ~15 recent items).
-    </p>
+    <div class="settings-card">
+        <div class="setting-row">
+            <div class="setting-info">
+                <label for="refresh-on-open">Refresh all feeds when VibeCast opens</label>
+            </div>
+            @SavedFlash("refreshOnOpen")
+            <input id="refresh-on-open" type="checkbox" class="toggle" checked="@Config.RefreshOnOpen" @onchange='e => SaveBoolAsync("refreshOnOpen", v => Config.RefreshOnOpen = v, e)' />
+        </div>
+        <div class="setting-row">
+            <div class="setting-info">
+                <label for="auto-refresh-interval">Auto-refresh interval (minutes)</label>
+                <div class="setting-hint">How often all feeds refresh in the background while VibeCast is running (@PeriodicFeedRefreshService.MinIntervalMinutes&ndash;@PeriodicFeedRefreshService.MaxIntervalMinutes); a change applies after the current interval elapses.</div>
+            </div>
+            @SavedFlash("interval")
+            <input id="auto-refresh-interval" type="number" min="@PeriodicFeedRefreshService.MinIntervalMinutes" max="@PeriodicFeedRefreshService.MaxIntervalMinutes" class="setting-num" value="@Config.AutoRefreshIntervalMinutes" @onchange="UpdateAutoRefreshIntervalAsync" />
+        </div>
+        <div class="setting-row">
+            <div class="setting-info">
+                <label for="concurrent-downloads">Concurrent downloads</label>
+                <div class="setting-hint">Takes effect next launch.</div>
+            </div>
+            @SavedFlash("concurrency")
+            <input id="concurrent-downloads" type="number" min="1" max="10" class="setting-num-sm" value="@Config.ConcurrentDownloadLimit" @onchange="UpdateConcurrencyAsync" />
+        </div>
+        <div class="setting-row">
+            <div class="setting-info">
+                <label for="auto-download-cutoff">Default auto-download cutoff (days)</label>
+                <div class="setting-hint">Applies to newly-added feeds; existing feeds keep their own setting.</div>
+            </div>
+            @SavedFlash("cutoff")
+            <input id="auto-download-cutoff" type="number" min="0" class="setting-num" value="@Config.DefaultAutoDownloadMaxAgeDays" @onchange="UpdateMaxAgeAsync" />
+        </div>
+        <div class="setting-row">
+            <div class="setting-info">
+                <label for="exclude-shorts">Exclude Shorts for new YouTube subscriptions</label>
+            </div>
+            @SavedFlash("shorts")
+            <input id="exclude-shorts" type="checkbox" class="toggle" checked="@Config.DefaultExcludeShorts" @onchange='e => SaveBoolAsync("shorts", v => Config.DefaultExcludeShorts = v, e)' />
+        </div>
+        <div class="setting-row">
+            <div class="setting-info">
+                <label for="initial-active-count">Episodes left active on new RSS subscribe</label>
+                <div class="setting-hint">The rest of the back catalog is pre-archived so a long-running feed doesn't flood downloads on day one. Doesn't apply to YouTube (its feed already returns only ~15 recent items).</div>
+            </div>
+            @SavedFlash("initialActive")
+            <input id="initial-active-count" type="number" min="0" class="setting-num" value="@Config.InitialActiveEpisodeCount" @onchange="UpdateInitialActiveEpisodeCountAsync" />
+        </div>
+    </div>
 </section>
 
-<section>
+<section id="retention">
     <h2>Retention</h2>
-    <p>
-        <label>
-            Keep last N downloaded files per feed
-            <input type="number" min="0" style="width: 6rem;" value="@Config.DefaultKeepLastCount" @onchange="UpdateKeepLastCountAsync" />
-        </label>
-        &mdash; 0 disables the backstop by default; per-feed overrides on the <a href="/feeds">Feeds</a> page win.
-    </p>
+    <div class="settings-card">
+        <div class="setting-row">
+            <div class="setting-info">
+                <label for="keep-last-count">Keep last N downloaded files per feed</label>
+                <div class="setting-hint">0 disables the backstop by default; per-feed overrides on the <a href="/feeds">Feeds</a> page win.</div>
+            </div>
+            @SavedFlash("keepLast")
+            <input id="keep-last-count" type="number" min="0" class="setting-num" value="@Config.DefaultKeepLastCount" @onchange="UpdateKeepLastCountAsync" />
+        </div>
+    </div>
 </section>
 
-<section>
+<section id="playback">
     <h2>Playback</h2>
-    <p>
-        <label>
-            Default playback speed
-            <input type="number" min="1.0" max="3.0" step="0.1" style="width: 5rem;" value="@Config.DefaultPlaybackSpeed" @onchange="UpdatePlaybackSpeedAsync" />
-        </label>
-        &mdash; RSS uses this exactly; YouTube's embed snaps to its own nearest native step.
-    </p>
-    <p>
-        <label>
-            Skip seconds (left/right arrow keys)
-            <input type="number" min="1" max="300" style="width: 5rem;" value="@Config.SkipSeconds" @onchange="UpdateSkipSecondsAsync" />
-        </label>
-        &mdash; how far left/right arrow keys jump during playback.
-    </p>
-    <p>
-        <label>
-            <input type="checkbox" checked="@Config.ClosedCaptionsEnabled" @onchange="e => SaveBoolAsync(v => Config.ClosedCaptionsEnabled = v, e)" />
-            Closed captions on by default
-        </label>
-        &mdash; YouTube only; RSS episodes have no caption tracks.
-    </p>
-    <p>
-        <label>
-            <input type="checkbox" checked="@Config.AutoMarkOnCompletion" @onchange="e => SaveBoolAsync(v => Config.AutoMarkOnCompletion = v, e)" />
-            Auto-mark episodes as played when playback completes
-        </label>
-    </p>
+    <div class="settings-card">
+        <div class="setting-row">
+            <div class="setting-info">
+                <label for="playback-speed">Default playback speed</label>
+                <div class="setting-hint">RSS uses this exactly; YouTube's embed snaps to its own nearest native step.</div>
+            </div>
+            @SavedFlash("speed")
+            <input id="playback-speed" type="number" min="1.0" max="3.0" step="0.1" class="setting-num-sm" value="@Config.DefaultPlaybackSpeed" @onchange="UpdatePlaybackSpeedAsync" />
+        </div>
+        <div class="setting-row">
+            <div class="setting-info">
+                <label for="skip-seconds">Skip seconds</label>
+                <div class="setting-hint">How far the left/right arrow keys jump during playback.</div>
+            </div>
+            @SavedFlash("skip")
+            <input id="skip-seconds" type="number" min="1" max="300" class="setting-num-sm" value="@Config.SkipSeconds" @onchange="UpdateSkipSecondsAsync" />
+        </div>
+        <div class="setting-row">
+            <div class="setting-info">
+                <label for="closed-captions">Closed captions on by default</label>
+                <div class="setting-hint">YouTube only; RSS episodes have no caption tracks.</div>
+            </div>
+            @SavedFlash("captions")
+            <input id="closed-captions" type="checkbox" class="toggle" checked="@Config.ClosedCaptionsEnabled" @onchange='e => SaveBoolAsync("captions", v => Config.ClosedCaptionsEnabled = v, e)' />
+        </div>
+        <div class="setting-row">
+            <div class="setting-info">
+                <label for="auto-mark">Auto-mark episodes as played on completion</label>
+            </div>
+            @SavedFlash("autoMark")
+            <input id="auto-mark" type="checkbox" class="toggle" checked="@Config.AutoMarkOnCompletion" @onchange='e => SaveBoolAsync("autoMark", v => Config.AutoMarkOnCompletion = v, e)' />
+        </div>
+    </div>
 </section>
 
-<section>
+<section id="opml">
     <h2>OPML</h2>
-    <p>Subscription migration only &mdash; round-trips the list of feed URLs, not per-feed settings, played/archive state, or episode history. For a full backup, copy the VibeCast folder.</p>
-    <p><a href="/opml/export">Export OPML</a></p>
-    <p>
-        <InputFile OnChange="HandleOpmlFileSelectedAsync" accept=".opml,.xml" disabled="@isImporting" />
-        @if (isImporting)
-        {
-            <span> importing...</span>
-        }
-    </p>
-    @if (importSummary is not null)
-    {
-        <p>@importSummary</p>
-    }
+    <div class="settings-card">
+        <div class="setting-row">
+            <div class="setting-info">
+                <label>Export subscriptions</label>
+                <div class="setting-hint">Subscription migration only &mdash; round-trips the list of feed URLs, not per-feed settings, played/archive state, or episode history. For a full backup, copy the VibeCast folder.</div>
+            </div>
+            <a href="/opml/export">Export OPML</a>
+        </div>
+        <div class="setting-row">
+            <div class="setting-info">
+                <label>Import subscriptions</label>
+                @if (importSummary is not null)
+                {
+                    <div class="setting-hint">@importSummary</div>
+                }
+            </div>
+            <span>
+                <InputFile OnChange="HandleOpmlFileSelectedAsync" accept=".opml,.xml" disabled="@isImporting" />
+                @if (isImporting)
+                {
+                    <span> importing...</span>
+                }
+            </span>
+        </div>
+    </div>
 </section>
 
-<section>
+<section id="about">
     <h2>About</h2>
-    <p>VibeCast @AppVersion</p>
+    <div class="settings-card">
+        <div class="setting-row">
+            <div class="setting-info">
+                <label>VibeCast @AppVersion</label>
+            </div>
+        </div>
+    </div>
 </section>
 
 </div>
@@ -170,13 +220,32 @@
     private string? importSummary;
     private readonly CancellationTokenSource cts = new();
     private IJSObjectReference? themeModule;
+    private string? savedKey;
+    private System.Threading.Timer? savedFlashTimer;
 
     private int? LivePort => RunLock.TryRead();
 
-    private void SaveBoolAsync(Action<bool> setter, ChangeEventArgs e)
+    private RenderFragment SavedFlash(string key) =>
+        @<span class="saved-flash @(savedKey == key ? "show" : null)">Saved &#10003;</span>;
+
+    // Shows the "Saved" confirmation next to the control identified by key,
+    // then fades it out after a moment.
+    private void FlashSaved(string key)
+    {
+        savedKey = key;
+        savedFlashTimer?.Dispose();
+        savedFlashTimer = new System.Threading.Timer(_ =>
+        {
+            savedKey = null;
+            _ = InvokeAsync(StateHasChanged);
+        }, null, 1500, Timeout.Infinite);
+    }
+
+    private void SaveBoolAsync(string key, Action<bool> setter, ChangeEventArgs e)
     {
         setter(e.Value is true);
         Config.Save();
+        FlashSaved(key);
     }
 
     private void UpdatePreferredPortAsync(ChangeEventArgs e)
@@ -185,6 +254,7 @@
         {
             Config.PreferredPort = port;
             Config.Save();
+            FlashSaved("port");
         }
     }
 
@@ -194,6 +264,7 @@
         {
             Config.GraceWindowSeconds = seconds;
             Config.Save();
+            FlashSaved("grace");
         }
     }
 
@@ -206,6 +277,7 @@
 
         Config.Theme = theme;
         Config.Save();
+        FlashSaved("theme");
 
         themeModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/theme.js");
         await themeModule.InvokeVoidAsync("setTheme", theme);
@@ -218,6 +290,7 @@
         {
             Config.AutoRefreshIntervalMinutes = minutes;
             Config.Save();
+            FlashSaved("interval");
         }
     }
 
@@ -227,6 +300,7 @@
         {
             Config.ConcurrentDownloadLimit = limit;
             Config.Save();
+            FlashSaved("concurrency");
         }
     }
 
@@ -236,6 +310,7 @@
         {
             Config.DefaultAutoDownloadMaxAgeDays = days;
             Config.Save();
+            FlashSaved("cutoff");
         }
     }
 
@@ -245,6 +320,7 @@
         {
             Config.InitialActiveEpisodeCount = count;
             Config.Save();
+            FlashSaved("initialActive");
         }
     }
 
@@ -254,6 +330,7 @@
         {
             Config.DefaultKeepLastCount = count;
             Config.Save();
+            FlashSaved("keepLast");
         }
     }
 
@@ -263,6 +340,7 @@
         {
             Config.DefaultPlaybackSpeed = speed;
             Config.Save();
+            FlashSaved("speed");
         }
     }
 
@@ -272,6 +350,7 @@
         {
             Config.SkipSeconds = seconds;
             Config.Save();
+            FlashSaved("skip");
         }
     }
 
@@ -340,6 +419,7 @@
     {
         cts.Cancel();
         cts.Dispose();
+        savedFlashTimer?.Dispose();
     }
 
     public async ValueTask DisposeAsync()

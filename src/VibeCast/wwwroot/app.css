@@ -256,6 +256,163 @@ section {
     margin-bottom: 1.5rem;
 }
 
+/* Settings page — card sections with divided rows: label + muted hint on the
+   left, the control on the right. */
+.settings-page {
+    max-width: 46rem;
+}
+
+    /* scroll-margin keeps anchored sections from landing under the sticky nav. */
+    .settings-page section {
+        margin-bottom: 1.75rem;
+        scroll-margin-top: 3.5rem;
+    }
+
+    .settings-page h2 {
+        font-size: 0.8rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--vc-text-muted);
+        border-bottom: none;
+        padding-bottom: 0;
+        margin: 0 0 0.5rem 0.2rem;
+    }
+
+.settings-card {
+    background: var(--vc-surface);
+    border: 1px solid var(--vc-border);
+    border-radius: var(--vc-radius);
+    padding: 0 1.1rem;
+}
+
+.setting-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.5rem;
+    padding: 0.8rem 0;
+}
+
+.setting-row + .setting-row {
+    border-top: 1px solid var(--vc-border);
+}
+
+.setting-info {
+    min-width: 0;
+}
+
+    .setting-info label {
+        font-weight: 500;
+        cursor: pointer;
+    }
+
+.setting-hint {
+    font-size: 0.82rem;
+    color: var(--vc-text-muted);
+    line-height: 1.45;
+    margin-top: 0.15rem;
+}
+
+.setting-row > input,
+.setting-row > select {
+    flex-shrink: 0;
+}
+
+/* Numeric inputs on the settings page — fixed widths so controls line up. */
+.setting-num {
+    width: 6rem;
+}
+
+.setting-num-sm {
+    width: 5rem;
+}
+
+/* CSS-only toggle switch (a restyled checkbox — same events, same @onchange). */
+input[type="checkbox"].toggle {
+    appearance: none;
+    width: 2.4rem;
+    height: 1.3rem;
+    margin: 0;
+    border: none;
+    border-radius: 999px;
+    background: var(--vc-border-strong);
+    position: relative;
+    cursor: pointer;
+    vertical-align: middle;
+    transition: background 0.15s ease;
+    flex-shrink: 0;
+}
+
+    input[type="checkbox"].toggle::before {
+        content: "";
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: calc(1.3rem - 4px);
+        height: calc(1.3rem - 4px);
+        border-radius: 50%;
+        background: #ffffff;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+        transition: transform 0.15s ease;
+    }
+
+    input[type="checkbox"].toggle:checked {
+        background: var(--vc-accent);
+    }
+
+        input[type="checkbox"].toggle:checked::before {
+            transform: translateX(1.1rem);
+        }
+
+    input[type="checkbox"].toggle:focus-visible {
+        outline: none;
+        box-shadow: 0 0 0 3px var(--vc-focus-glow);
+    }
+
+/* Brief "Saved" confirmation that fades in next to a control after a change
+   persists, then fades back out. */
+.saved-flash {
+    font-size: 0.78rem;
+    color: var(--vc-success);
+    white-space: nowrap;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    margin-left: auto;
+}
+
+    .saved-flash.show {
+        opacity: 1;
+    }
+
+/* Sticky section nav pinned to the top of the settings page. */
+.settings-nav {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    padding: 0.6rem 0;
+    margin-bottom: 0.75rem;
+    background: var(--vc-bg);
+    border-bottom: 1px solid var(--vc-border);
+}
+
+    .settings-nav a {
+        font-size: 0.82rem;
+        color: var(--vc-text-muted);
+        padding: 0.25rem 0.7rem;
+        border-radius: 999px;
+    }
+
+        .settings-nav a:hover {
+            color: var(--vc-accent);
+            background: var(--vc-accent-soft);
+            text-decoration: none;
+        }
+
+
 table {
     border-collapse: collapse;
     width: 100%;
