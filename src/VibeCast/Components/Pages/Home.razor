@@ -30,9 +30,9 @@
                 </button>
             </li>
             <li class="feed-filter">
-                <label>
-                    <input type="checkbox" checked="@Config.HideEmptyFeeds" @onchange="ToggleHideEmptyFeedsAsync" />
-                    Hide feeds with no unplayed episodes
+                <label title="Hide feeds with no unplayed episodes">
+                    <input type="checkbox" class="toggle" checked="@Config.HideEmptyFeeds" @onchange="ToggleHideEmptyFeedsAsync" />
+                    Hide empty feeds
                 </label>
             </li>
             @if (feeds is not null)
@@ -66,7 +66,7 @@
         <div class="episode-list-header">
             <h2>@(showArchived ? "Archived" : "Episodes")</h2>
             <label>
-                <input type="checkbox" checked="@showArchived" @onchange="ToggleShowArchivedAsync" />
+                <input type="checkbox" class="toggle" checked="@showArchived" @onchange="ToggleShowArchivedAsync" />
                 Show archived
             </label>
             <button @onclick="ToggleSortOrderAsync" title="Toggle sort order">
