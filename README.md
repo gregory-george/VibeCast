@@ -61,6 +61,8 @@ Everything is in-app at **`/settings`**:
 
 - **Startup & window** — listen port, refresh-on-open, system tray on/off, shutdown grace
   window.
+- **Refresh** — how often feeds refresh automatically in the background while VibeCast is
+  running (30–180 minutes), on top of refresh-on-open.
 - **Appearance** — theme (light / dark / system).
 - **Playback** — default speed, skip-seconds, closed-captions default, and
   auto-mark-as-played on completion.
