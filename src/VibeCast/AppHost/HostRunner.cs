@@ -203,6 +203,7 @@ internal static class HostRunner
         builder.Services.AddSingleton<CircuitTracker>();
         builder.Services.AddScoped<Microsoft.AspNetCore.Components.Server.Circuits.CircuitHandler, TrackingCircuitHandler>();
         builder.Services.AddHostedService<ShutdownCoordinatorService>();
+        builder.Services.AddHostedService<PeriodicFeedRefreshService>();
 
         // Same mutable instance RunAsync persists run.lock/port through, so a
         // settings toggle saved from the UI doesn't clobber the live-bound port.

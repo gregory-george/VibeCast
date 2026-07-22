@@ -187,6 +187,11 @@ These are the things that silently break the app if violated.
   ingest, so items past the age cutoff stay skipped. Logs older than 30 days are pruned
   (`Logging/LogRetention`, keyed off the date in the filename). First run only (`config.json`
   doesn't exist yet): offer to create a desktop shortcut, once ever.
+- **Periodic auto-refresh while running:** `Feeds/PeriodicFeedRefreshService` (a hosted
+  `BackgroundService`) refreshes all feeds every `AutoRefreshIntervalMinutes` (default **60**,
+  clamped **30–180**). The interval is re-read from `AppConfig` before each wait, so a Settings
+  change applies on the next cycle without a restart; the first timed refresh fires one full
+  interval after startup (launch-time refresh stays `RefreshOnOpen`'s job).
 - **Refresh is concurrent but bounded** (4 feeds at a time — WAL is single-writer; the 30 s
   busy timeout absorbs the write contention). Each fetch retries **transient** failures only
   (timeout / 408 / 429 / 5xx / transport; 3 attempts, exponential backoff) — other 4xx and
@@ -344,8 +349,9 @@ These are the things that silently break the app if violated.
 
 ## Out of scope — do not build (v1)
 
-Background/scheduled refresh or downloads (the launch-time refresh-on-open and download sweep are
-the deliberate extent of automation) · cross-device/cloud sync · authenticated-feed UI / HTTP
+Scheduled/background **downloads** (the launch-time download sweep plus downloads triggered by
+refresh are the deliberate extent; refresh itself now also runs on the in-process periodic timer
+above — but no OS-scheduled work while the app is closed) · cross-device/cloud sync · authenticated-feed UI / HTTP
 Basic auth (token-in-URL feeds work incidentally) · podcast **chapters** (still deferred even with
 the in-app player) · podcast directory search (add-by-URL + OPML only) · arm64 · native toast
 notifications · mobile.

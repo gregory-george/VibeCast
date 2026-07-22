@@ -61,6 +61,13 @@
     </p>
     <p>
         <label>
+            Auto-refresh interval (minutes)
+            <input type="number" min="@PeriodicFeedRefreshService.MinIntervalMinutes" max="@PeriodicFeedRefreshService.MaxIntervalMinutes" style="width: 6rem;" value="@Config.AutoRefreshIntervalMinutes" @onchange="UpdateAutoRefreshIntervalAsync" />
+        </label>
+        &mdash; how often all feeds refresh in the background while VibeCast is running (30&ndash;180); a change applies after the current interval elapses.
+    </p>
+    <p>
+        <label>
             Concurrent downloads
             <input type="number" min="1" max="10" style="width: 5rem;" value="@Config.ConcurrentDownloadLimit" @onchange="UpdateConcurrencyAsync" />
         </label>
@@ -202,6 +209,16 @@
 
         themeModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/theme.js");
         await themeModule.InvokeVoidAsync("setTheme", theme);
+    }
+
+    private void UpdateAutoRefreshIntervalAsync(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value as string, out var minutes)
+            && minutes is >= PeriodicFeedRefreshService.MinIntervalMinutes and <= PeriodicFeedRefreshService.MaxIntervalMinutes)
+        {
+            Config.AutoRefreshIntervalMinutes = minutes;
+            Config.Save();
+        }
     }
 
     private void UpdateConcurrencyAsync(ChangeEventArgs e)

@@ -22,6 +22,14 @@ internal sealed class AppConfig
     /// <summary>Refresh all feeds automatically each time the app is opened. Default on.</summary>
     public bool RefreshOnOpen { get; set; } = true;
 
+    /// <summary>
+    /// Minutes between automatic background refreshes of all feeds while the app is
+    /// running (see <see cref="VibeCast.Feeds.PeriodicFeedRefreshService"/>). Default 60;
+    /// clamped to 30-180 when used. Separate from <see cref="RefreshOnOpen"/>, which
+    /// covers the launch-time refresh.
+    /// </summary>
+    public int AutoRefreshIntervalMinutes { get; set; } = 60;
+
     /// <summary>Global keep-last-N backstop, overridable per feed (<see cref="VibeCast.Data.Feed.KeepLastCount"/>).</summary>
     public int DefaultKeepLastCount { get; set; } = 100;
 
