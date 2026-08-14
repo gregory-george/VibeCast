@@ -192,13 +192,14 @@
     font-size: 0.82rem;
 }
 
-.shorts-badge {
+.shorts-badge,
+.upcoming-badge,
+.streaming-badge,
+.downloaded-badge {
     display: inline-block;
     margin-left: 0.4rem;
     padding: 0.05rem 0.4rem;
     border-radius: 999px;
-    background: var(--vc-accent-soft);
-    color: var(--vc-accent-strong);
     font-size: 0.7rem;
     font-weight: 600;
     text-transform: uppercase;
@@ -206,18 +207,24 @@
     vertical-align: middle;
 }
 
+.shorts-badge {
+    background: var(--vc-accent-soft);
+    color: var(--vc-accent-strong);
+}
+
 .upcoming-badge {
-    display: inline-block;
-    margin-left: 0.4rem;
-    padding: 0.05rem 0.4rem;
-    border-radius: 999px;
     border: 1px solid var(--vc-warning);
     color: var(--vc-warning);
-    font-size: 0.7rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.02em;
-    vertical-align: middle;
+}
+
+.streaming-badge {
+    border: 1px solid var(--vc-accent-bright);
+    color: var(--vc-accent-bright);
+}
+
+.downloaded-badge {
+    border: 1px solid var(--vc-success);
+    color: var(--vc-success);
 }
 
 .episode-detail {

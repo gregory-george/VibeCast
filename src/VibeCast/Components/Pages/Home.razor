@@ -98,6 +98,14 @@
                             {
                                 <span class="upcoming-badge" title="@UpcomingTooltip(episode.ScheduledStartUtc)">Upcoming</span>
                             }
+                            @if (episode.IsStreaming)
+                            {
+                                <span class="streaming-badge" title="Streams from YouTube">Streaming</span>
+                            }
+                            @if (episode.IsDownloaded)
+                            {
+                                <span class="downloaded-badge" title="Downloaded and ready to play offline">Downloaded</span>
+                            }
                         </div>
                         <div class="episode-meta">
                             @episode.FeedTitle &middot; @episode.PublishedAtUtc.ToLocalTime().ToString("MMM d, yyyy") &middot; @FormatDurationOrSchedule(episode.DurationSeconds, episode.ScheduledStartUtc) &middot; @FormatFileSize(episode.FileSizeBytes)
@@ -222,6 +230,8 @@
                 e.DurationSeconds,
                 e.ScheduledStartUtc,
                 IsShort = e.EnclosureUrl == null && e.DurationSeconds != null && e.DurationSeconds <= 300,
+                IsStreaming = e.YouTubeVideoId != null && e.ScheduledStartUtc == null,
+                e.IsDownloaded,
                 FeedSlug = e.Feed.Slug,
                 e.DownloadedFileName,
             })
@@ -229,7 +239,13 @@
             .ToListAsync(cts.Token);
 
         episodes = rows
-            .Select(r => new EpisodeListItem(r.Id, r.Title, r.FeedTitle, r.PublishedAtUtc, r.DurationSeconds, r.ScheduledStartUtc, r.IsShort, GetFileSize(r.FeedSlug, r.DownloadedFileName)))
+            .Select(r =>
+            {
+                // The flag can outlive the file (mark-as-played defers a locked delete), so
+                // the badge follows what is actually on disk.
+                var fileSize = GetFileSize(r.FeedSlug, r.DownloadedFileName);
+                return new EpisodeListItem(r.Id, r.Title, r.FeedTitle, r.PublishedAtUtc, r.DurationSeconds, r.ScheduledStartUtc, r.IsShort, r.IsStreaming, r.IsDownloaded && fileSize is not null, fileSize);
+            })
             .ToList();
     }
 
@@ -445,7 +461,7 @@
 
     private sealed record FeedSummary(int Id, string Title, int ActiveCount, long UnplayedSeconds, bool HasArtwork);
 
-    private sealed record EpisodeListItem(int Id, string Title, string FeedTitle, DateTime PublishedAtUtc, int? DurationSeconds, DateTime? ScheduledStartUtc, bool IsShort, long? FileSizeBytes);
+    private sealed record EpisodeListItem(int Id, string Title, string FeedTitle, DateTime PublishedAtUtc, int? DurationSeconds, DateTime? ScheduledStartUtc, bool IsShort, bool IsStreaming, bool IsDownloaded, long? FileSizeBytes);
 
     private sealed record EpisodeDetail(int Id, string Title, string FeedTitle, DateTime PublishedAtUtc, int? DurationSeconds, DateTime? ScheduledStartUtc, string? DescriptionHtml, bool IsPlayed, bool IsArchived, bool IsRss, bool IsShort, bool IsDownloaded, long? FileSizeBytes);
 }
