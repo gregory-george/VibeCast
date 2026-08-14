@@ -157,6 +157,89 @@ public class EpisodeStateServiceTests
     }
 
     [Fact]
+    public async Task MarkFeedAsPlayed_ArchivesActiveEpisodesAndDeletesTheirFiles()
+    {
+        using var factory = new TestDbContextFactory();
+        var tracker = new DownloadProgressTracker();
+        var service = BuildService(factory, tracker);
+        var (feedId, slug, episodeIds, filePath) = await SeedFeedAsync(factory);
+
+        try
+        {
+            var marked = await service.MarkFeedAsPlayedAsync(feedId, CancellationToken.None);
+
+            Assert.Equal(episodeIds.Count, marked);
+            foreach (var episodeId in episodeIds)
+            {
+                var episode = await LoadEpisodeAsync(factory, episodeId);
+                Assert.True(episode.IsPlayed);
+                Assert.True(episode.IsArchived);
+                Assert.False(episode.IsDownloaded);
+                Assert.Null(episode.DownloadedFileName);
+            }
+
+            Assert.False(File.Exists(filePath));
+        }
+        finally
+        {
+            SafeDeleteDir(Path.Combine(AppPaths.DownloadsDirectory, slug));
+        }
+    }
+
+    [Fact]
+    public async Task MarkFeedAsPlayed_CancelsInFlightDownload()
+    {
+        using var factory = new TestDbContextFactory();
+        var tracker = new DownloadProgressTracker();
+        var registry = new DownloadCancellationRegistry(tracker);
+        var service = BuildService(factory, tracker, registry);
+        var (feedId, slug, episodeIds, _) = await SeedFeedAsync(factory);
+        var downloadingId = episodeIds[0];
+        var queuedId = episodeIds[1];
+
+        try
+        {
+            // One episode mid-flight (the worker has registered it), one still queued.
+            using var downloadCts = registry.Register(downloadingId, CancellationToken.None);
+            tracker.Set(new DownloadProgressSnapshot(downloadingId, "Ep", "Feed", DownloadStatus.Downloading, 1, 10, null));
+            tracker.Set(new DownloadProgressSnapshot(queuedId, "Ep", "Feed", DownloadStatus.Queued, 0, null, null));
+
+            await service.MarkFeedAsPlayedAsync(feedId, CancellationToken.None);
+
+            Assert.True(downloadCts.IsCancellationRequested);
+            Assert.Equal(DownloadStatus.Canceled, tracker.Get(queuedId)!.Status);
+        }
+        finally
+        {
+            SafeDeleteDir(Path.Combine(AppPaths.DownloadsDirectory, slug));
+        }
+    }
+
+    [Fact]
+    public async Task MarkFeedAsPlayed_DoesNotCancelALaterUnrelatedDownload()
+    {
+        using var factory = new TestDbContextFactory();
+        var tracker = new DownloadProgressTracker();
+        var registry = new DownloadCancellationRegistry(tracker);
+        var service = BuildService(factory, tracker, registry);
+        var (feedId, slug, episodeIds, _) = await SeedFeedAsync(factory);
+
+        try
+        {
+            // No live download for any episode, so nothing may be parked in the registry:
+            // a stale pending cancellation would kill the re-download an Unarchive queues.
+            await service.MarkFeedAsPlayedAsync(feedId, CancellationToken.None);
+
+            using var laterCts = registry.Register(episodeIds[0], CancellationToken.None);
+            Assert.False(laterCts.IsCancellationRequested);
+        }
+        finally
+        {
+            SafeDeleteDir(Path.Combine(AppPaths.DownloadsDirectory, slug));
+        }
+    }
+
+    [Fact]
     public async Task SavePlaybackPosition_Persists()
     {
         using var factory = new TestDbContextFactory();
@@ -170,7 +253,11 @@ public class EpisodeStateServiceTests
     }
 
     private static EpisodeStateService BuildService(TestDbContextFactory factory, DownloadProgressTracker tracker) =>
-        new(factory, new DownloadQueue(tracker), tracker, NullLogger<EpisodeStateService>.Instance);
+        BuildService(factory, tracker, new DownloadCancellationRegistry(tracker));
+
+    private static EpisodeStateService BuildService(
+        TestDbContextFactory factory, DownloadProgressTracker tracker, DownloadCancellationRegistry registry) =>
+        new(factory, new DownloadQueue(tracker), tracker, registry, NullLogger<EpisodeStateService>.Instance);
 
     /// <summary>Seeds an RSS episode with a real downloaded file under downloads/&lt;slug&gt;/.</summary>
     private static async Task<(int episodeId, string slug, string filePath)> SeedDownloadedEpisodeAsync(
@@ -210,6 +297,52 @@ public class EpisodeStateServiceTests
         await File.WriteAllTextAsync(filePath, "audio bytes");
 
         return (episode.Id, slug, filePath);
+    }
+
+    /// <summary>
+    /// Seeds an RSS feed with three active episodes (the first downloaded, with a real
+    /// file on disk) plus one already-archived episode the bulk pass must ignore.
+    /// </summary>
+    private static async Task<(int feedId, string slug, List<int> activeEpisodeIds, string filePath)> SeedFeedAsync(
+        TestDbContextFactory factory)
+    {
+        var slug = "bulk-" + Guid.NewGuid().ToString("N");
+        const string fileName = "episode.mp3";
+
+        await using var db = factory.CreateDbContext();
+        var feed = new Feed
+        {
+            OriginalUrl = "https://example/feed",
+            FeedUrl = "https://example/feed",
+            Slug = slug,
+            Title = "Test Feed",
+            Type = FeedType.Rss,
+            DateAddedUtc = DateTime.UtcNow,
+        };
+
+        var episodes = Enumerable.Range(0, 4).Select(i => new Episode
+        {
+            Feed = feed,
+            DedupKey = $"guid:{i}",
+            Title = $"Episode {i}",
+            PublishedAtUtc = DateTime.UtcNow.AddDays(-i),
+            EnclosureUrl = $"https://cdn.example/ep{i}.mp3",
+            EnclosureMediaType = "audio/mpeg",
+            IsDownloaded = i == 0,
+            DownloadedFileName = i == 0 ? fileName : null,
+            IsPlayed = i == 3,
+            IsArchived = i == 3,
+        }).ToList();
+
+        db.Episodes.AddRange(episodes);
+        await db.SaveChangesAsync();
+
+        var feedDir = Path.Combine(AppPaths.DownloadsDirectory, slug);
+        Directory.CreateDirectory(feedDir);
+        var filePath = Path.Combine(feedDir, fileName);
+        await File.WriteAllTextAsync(filePath, "audio bytes");
+
+        return (feed.Id, slug, episodes.Take(3).Select(e => e.Id).ToList(), filePath);
     }
 
     private static async Task<int> SeedYouTubeEpisodeAsync(TestDbContextFactory factory, bool played = false)

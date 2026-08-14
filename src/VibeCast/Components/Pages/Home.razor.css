@@ -181,6 +181,23 @@
         box-shadow: 0 0 0 1px var(--vc-accent), 0 2px 8px var(--vc-focus-glow);
     }
 
+.episode-list-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+    margin-top: 0.75rem;
+    padding-top: 0.6rem;
+    border-top: 1px solid var(--vc-border);
+    font-size: 0.82rem;
+    color: var(--vc-text-muted);
+}
+
+    .episode-list-actions button {
+        font-size: 0.82rem;
+        padding: 0.25rem 0.6rem;
+    }
+
 .episode-title {
     font-weight: 500;
     color: var(--vc-text);

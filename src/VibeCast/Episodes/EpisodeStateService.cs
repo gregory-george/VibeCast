@@ -13,6 +13,7 @@ internal sealed class EpisodeStateService(
     IDbContextFactory<AppDbContext> dbContextFactory,
     DownloadQueue downloadQueue,
     DownloadProgressTracker progressTracker,
+    DownloadCancellationRegistry cancellationRegistry,
     ILogger<EpisodeStateService> logger)
 {
     /// <summary>
@@ -31,23 +32,74 @@ internal sealed class EpisodeStateService(
 
         episode.IsPlayed = true;
         episode.IsArchived = true;
+        DeleteDownloadedFile(episode);
 
-        if (episode.EnclosureUrl is not null && episode.DownloadedFileName is not null)
+        await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>
+    /// Bulk mark-as-played over every active episode of one feed. Each episode's queued
+    /// or in-flight download is canceled first so the queue isn't left fetching files for
+    /// records that just moved to Archive; the per-episode transition is otherwise
+    /// identical to <see cref="MarkAsPlayedAsync"/>. Returns how many were marked.
+    /// </summary>
+    public async Task<int> MarkFeedAsPlayedAsync(int feedId, CancellationToken ct)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(ct);
+        var episodes = await db.Episodes
+            .Include(e => e.Feed)
+            .Where(e => e.FeedId == feedId && !e.IsArchived)
+            .ToListAsync(ct);
+
+        foreach (var episode in episodes)
         {
-            var filePath = DownloadFileStore.PathFor(episode.Feed.Slug, episode.DownloadedFileName);
-            if (DownloadFileStore.TryDelete(filePath, logger))
-            {
-                episode.IsDownloaded = false;
-                episode.DownloadedFileName = null;
-                progressTracker.Clear(episodeId);
-            }
-            // Otherwise the file is locked (almost always still open in the player).
-            // Leave IsDownloaded/DownloadedFileName intact so the retention sweep retries
-            // the delete once playback releases it; the played/archived flags still move
-            // now so the episode leaves the active list immediately.
+            CancelDownload(episode.Id);
+            episode.IsPlayed = true;
+            episode.IsArchived = true;
+            DeleteDownloadedFile(episode);
         }
 
         await db.SaveChangesAsync(ct);
+        logger.LogInformation("Marked {Count} episode(s) as played for feed {FeedId}", episodes.Count, feedId);
+        return episodes.Count;
+    }
+
+    /// <summary>
+    /// Cancels a download only when one is genuinely live. The registry parks a pending
+    /// cancellation for any episode it doesn't find in flight, and a stale entry would
+    /// kill an unrelated later download of the same episode (e.g. after Unarchive).
+    /// </summary>
+    private void CancelDownload(int episodeId)
+    {
+        if (progressTracker.Get(episodeId) is { Status: DownloadStatus.Queued or DownloadStatus.Downloading })
+        {
+            cancellationRegistry.TryCancel(episodeId);
+        }
+    }
+
+    /// <summary>
+    /// Deletes the RSS enclosure of an episode being marked played (YouTube has nothing
+    /// on disk). A locked file -- almost always one still open in the player -- is left
+    /// alone with IsDownloaded/DownloadedFileName intact so the retention sweep retries
+    /// the delete once playback releases it; the played/archived flags still move now so
+    /// the episode leaves the active list immediately. The same sweep also catches a
+    /// download that lands moments after cancellation, since it works off IsPlayed +
+    /// IsDownloaded rather than anything in memory.
+    /// </summary>
+    private void DeleteDownloadedFile(Episode episode)
+    {
+        if (episode.EnclosureUrl is null || episode.DownloadedFileName is null)
+        {
+            return;
+        }
+
+        var filePath = DownloadFileStore.PathFor(episode.Feed.Slug, episode.DownloadedFileName);
+        if (DownloadFileStore.TryDelete(filePath, logger))
+        {
+            episode.IsDownloaded = false;
+            episode.DownloadedFileName = null;
+            progressTracker.Clear(episode.Id);
+        }
     }
 
     public async Task UnarchiveAsync(int episodeId, CancellationToken ct)

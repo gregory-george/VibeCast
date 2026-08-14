@@ -113,6 +113,25 @@
                     </li>
                 }
             </ul>
+
+            @if (CanMarkFeedAsPlayed)
+            {
+                <div class="episode-list-actions">
+                    @if (confirmingMarkAllPlayed)
+                    {
+                        <span>Mark all @episodes.Count episodes in this feed as played?</span>
+                        <button class="danger" @onclick="MarkFeedAsPlayedAsync" disabled="@isMarkingAllPlayed">Yes, mark all</button>
+                        <button @onclick="() => confirmingMarkAllPlayed = false" disabled="@isMarkingAllPlayed">Cancel</button>
+                    }
+                    else
+                    {
+                        <button title="Mark every episode in this feed as played, cancel its pending downloads, and archive it"
+                                @onclick="() => confirmingMarkAllPlayed = true">
+                            Mark all as played
+                        </button>
+                    }
+                </div>
+            }
         }
     </section>
 
@@ -181,7 +200,15 @@
     private int? selectedFeedId;
     private int? selectedEpisodeId;
     private bool showArchived;
+    private bool confirmingMarkAllPlayed;
+    private bool isMarkingAllPlayed;
     private readonly CancellationTokenSource cts = new();
+
+    // Bulk mark-as-played is a per-feed action, so it needs a feed selected (not "All
+    // feeds"), and it only makes sense on the active list -- archived items are played
+    // already. Short lists aren't worth the risk of a mis-click.
+    private bool CanMarkFeedAsPlayed =>
+        !showArchived && selectedFeedId is not null && episodes is { Count: > 5 };
 
     protected override async Task OnInitializedAsync()
     {
@@ -254,6 +281,7 @@
         selectedFeedId = feedId;
         selectedEpisodeId = null;
         detail = null;
+        confirmingMarkAllPlayed = false;
         await LoadEpisodesAsync();
     }
 
@@ -281,6 +309,7 @@
         showArchived = e.Value is true;
         selectedEpisodeId = null;
         detail = null;
+        confirmingMarkAllPlayed = false;
         await LoadEpisodesAsync();
     }
 
@@ -371,7 +400,32 @@
         await RefreshAfterMutationAsync(episodeId);
     }
 
-    private async Task RefreshAfterMutationAsync(int episodeId)
+    private async Task MarkFeedAsPlayedAsync()
+    {
+        if (selectedFeedId is not { } feedId)
+        {
+            return;
+        }
+
+        isMarkingAllPlayed = true;
+        try
+        {
+            await EpisodeStateService.MarkFeedAsPlayedAsync(feedId, cts.Token);
+        }
+        finally
+        {
+            isMarkingAllPlayed = false;
+            confirmingMarkAllPlayed = false;
+        }
+
+        // Everything in the list just moved to Archive, so whatever was selected is gone
+        // from it -- drop the selection rather than reloading a detail pane for it.
+        selectedEpisodeId = null;
+        detail = null;
+        await RefreshAfterMutationAsync(null);
+    }
+
+    private async Task RefreshAfterMutationAsync(int? episodeId)
     {
         await LoadFeedsAsync();
 
@@ -384,9 +438,9 @@
 
         await LoadEpisodesAsync();
 
-        if (selectedEpisodeId == episodeId)
+        if (episodeId is { } id && selectedEpisodeId == id)
         {
-            await SelectEpisodeAsync(episodeId);
+            await SelectEpisodeAsync(id);
         }
     }
 
