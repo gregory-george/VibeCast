@@ -55,6 +55,7 @@ else
                 <th>Type</th>
                 <th>Slug</th>
                 <th>Episodes</th>
+                <th>Latest release</th>
                 <th>Last refreshed</th>
                 <th>Auto-download</th>
                 <th>Keep last</th>
@@ -75,6 +76,9 @@ else
                     <td>@feed.Type</td>
                     <td>@feed.Slug</td>
                     <td>@feed.EpisodeCount</td>
+                    <td title="@(feed.LatestEpisodeUtc is null ? null : DateTime.SpecifyKind(feed.LatestEpisodeUtc.Value, DateTimeKind.Utc).ToLocalTime().ToString("g"))">
+                        @FormatAge(feed.LatestEpisodeUtc)
+                    </td>
                     <td>
                         @(feed.LastRefreshedUtc?.ToLocalTime().ToString("g") ?? "never")
                         @if (feed.LastRefreshError is not null)
@@ -135,7 +139,7 @@ else
         await using var db = await DbContextFactory.CreateDbContextAsync(cts.Token);
         feeds = await db.Feeds
             .OrderBy(f => f.Title)
-            .Select(f => new FeedRow(f.Id, f.Title ?? f.OriginalUrl, f.Type, f.Slug, f.Episodes.Count, f.LastRefreshedUtc, f.AutoDownloadEnabled, f.KeepLastCount, f.LastRefreshError, f.ArtworkFileName != null))
+            .Select(f => new FeedRow(f.Id, f.Title ?? f.OriginalUrl, f.Type, f.Slug, f.Episodes.Count, f.Episodes.Max(e => (DateTime?)e.PublishedAtUtc), f.LastRefreshedUtc, f.AutoDownloadEnabled, f.KeepLastCount, f.LastRefreshError, f.ArtworkFileName != null))
             .ToListAsync(cts.Token);
     }
 
@@ -257,5 +261,44 @@ else
         cts.Dispose();
     }
 
-    private sealed record FeedRow(int Id, string Title, FeedType Type, string Slug, int EpisodeCount, DateTime? LastRefreshedUtc, bool AutoDownloadEnabled, int? KeepLastCount, string? LastRefreshError, bool HasArtwork);
+    // The Max aggregate bypasses the UTC value converter, so re-stamp Kind here.
+    private static string FormatAge(DateTime? publishedAtUtc)
+    {
+        if (publishedAtUtc is null)
+        {
+            return "never";
+        }
+
+        var elapsed = DateTime.UtcNow - DateTime.SpecifyKind(publishedAtUtc.Value, DateTimeKind.Utc);
+        if (elapsed < TimeSpan.FromMinutes(1))
+        {
+            return "just now";
+        }
+
+        if (elapsed < TimeSpan.FromHours(1))
+        {
+            return Plural((int)elapsed.TotalMinutes, "minute");
+        }
+
+        if (elapsed < TimeSpan.FromDays(1))
+        {
+            return Plural((int)elapsed.TotalHours, "hour");
+        }
+
+        if (elapsed < TimeSpan.FromDays(30))
+        {
+            return Plural((int)elapsed.TotalDays, "day");
+        }
+
+        if (elapsed < TimeSpan.FromDays(365))
+        {
+            return Plural((int)(elapsed.TotalDays / 30), "month");
+        }
+
+        return Plural((int)(elapsed.TotalDays / 365), "year");
+
+        static string Plural(int count, string unit) => $"{count} {unit}{(count == 1 ? "" : "s")} ago";
+    }
+
+    private sealed record FeedRow(int Id, string Title, FeedType Type, string Slug, int EpisodeCount, DateTime? LatestEpisodeUtc, DateTime? LastRefreshedUtc, bool AutoDownloadEnabled, int? KeepLastCount, string? LastRefreshError, bool HasArtwork);
 }
