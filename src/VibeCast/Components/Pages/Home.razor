@@ -353,14 +353,14 @@
             {
                 DownloadStatus.Queued => "Queued for download.",
                 DownloadStatus.Downloading => $"Downloading... {snapshot.FormatProgress()}",
-                DownloadStatus.Completed => "Downloaded.",
+                DownloadStatus.Completed => string.Empty,
                 DownloadStatus.Failed => $"Download failed: {snapshot.ErrorMessage}",
                 DownloadStatus.Canceled => "Download canceled.",
                 _ => string.Empty,
             };
         }
 
-        return current.IsDownloaded ? "Downloaded." : "Not downloaded.";
+        return current.IsDownloaded ? string.Empty : "Not downloaded.";
     }
 
     private bool CanManuallyDownload(EpisodeDetail current)
