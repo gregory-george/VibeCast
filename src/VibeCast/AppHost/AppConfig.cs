@@ -111,6 +111,17 @@ internal sealed class AppConfig
     /// </summary>
     public bool EpisodeSortDescending { get; set; } = true;
 
+    /// <summary>
+    /// Which column the feed table on the Feeds page is sorted by (see
+    /// <see cref="VibeCast.Components.Pages.Feeds"/>), so the last-clicked sort is
+    /// restored the next time the page opens. Holds one of that page's column keys;
+    /// an unrecognized value falls back to title order.
+    /// </summary>
+    public string FeedSortColumn { get; set; } = "Title";
+
+    /// <summary>Direction for <see cref="FeedSortColumn"/>. Default false (ascending, A-Z by title).</summary>
+    public bool FeedSortDescending { get; set; }
+
     public static AppConfig Load()
     {
         lock (FileGate)

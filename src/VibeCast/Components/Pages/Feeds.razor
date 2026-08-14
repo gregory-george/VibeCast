@@ -51,14 +51,15 @@ else
         <thead>
             <tr>
                 <th></th>
-                <th>Title</th>
-                <th>Type</th>
-                <th>Slug</th>
-                <th>Episodes</th>
-                <th>Latest release</th>
-                <th>Last refreshed</th>
-                <th>Auto-download</th>
-                <th>Keep last</th>
+                @foreach (var column in SortColumns)
+                {
+                    <th class="sortable" aria-sort="@(ActiveColumn.Key == column.Key ? (Config.FeedSortDescending ? "descending" : "ascending") : "none")">
+                        <button @onclick="() => SortByAsync(column)" title="Sort by @column.Label">
+                            @column.Label
+                            <span class="sort-arrow">@(ActiveColumn.Key == column.Key && Config.FeedSortDescending ? "↓" : "↑")</span>
+                        </button>
+                    </th>
+                }
                 <th></th>
             </tr>
         </thead>
@@ -123,6 +124,21 @@ else
 </div>
 
 @code {
+    // Order here is the column order in the table header, and each Key is what lands in
+    // config.json as AppConfig.FeedSortColumn -- renaming one resets that saved preference
+    // to the first entry (title).
+    private static readonly SortColumn[] SortColumns =
+    [
+        new("Title", "Title", DescendingFirst: false, r => r.Title),
+        new("Type", "Type", DescendingFirst: false, r => r.Type.ToString()),
+        new("Slug", "Slug", DescendingFirst: false, r => r.Slug),
+        new("Episodes", "Episodes", DescendingFirst: true, r => r.EpisodeCount),
+        new("LatestRelease", "Latest release", DescendingFirst: true, r => r.LatestEpisodeUtc),
+        new("LastRefreshed", "Last refreshed", DescendingFirst: true, r => r.LastRefreshedUtc),
+        new("AutoDownload", "Auto-download", DescendingFirst: true, r => r.AutoDownloadEnabled),
+        new("KeepLast", "Keep last", DescendingFirst: true, r => r.KeepLastCount),
+    ];
+
     private List<FeedRow>? feeds;
     private string newFeedUrl = string.Empty;
     private bool isAdding;
@@ -132,15 +148,39 @@ else
     private string? statusMessage;
     private CancellationTokenSource cts = new();
 
+    /// <summary>The saved sort column, falling back to title if config.json holds an unknown key.</summary>
+    private SortColumn ActiveColumn => Array.Find(SortColumns, c => c.Key == Config.FeedSortColumn) ?? SortColumns[0];
+
     protected override async Task OnInitializedAsync() => await LoadFeedsAsync();
 
     private async Task LoadFeedsAsync()
     {
         await using var db = await DbContextFactory.CreateDbContextAsync(cts.Token);
-        feeds = await db.Feeds
-            .OrderBy(f => f.Title)
+        var rows = await db.Feeds
             .Select(f => new FeedRow(f.Id, f.Title ?? f.OriginalUrl, f.Type, f.Slug, f.Episodes.Count, f.Episodes.Max(e => (DateTime?)e.PublishedAtUtc), f.LastRefreshedUtc, f.AutoDownloadEnabled, f.KeepLastCount, f.LastRefreshError, f.ArtworkFileName != null))
             .ToListAsync(cts.Token);
+
+        // Ordering happens here rather than in SQL: the feed list is small, and several
+        // sortable columns (latest release, keep-last) are aggregates or nullable values
+        // the provider would order differently than the rendered text. Title breaks ties
+        // so equal values (e.g. two never-refreshed feeds) keep a stable order.
+        var sorted = Config.FeedSortDescending
+            ? rows.OrderByDescending(ActiveColumn.Selector).ThenBy(r => r.Title)
+            : rows.OrderBy(ActiveColumn.Selector).ThenBy(r => r.Title);
+
+        feeds = sorted.ToList();
+    }
+
+    private async Task SortByAsync(SortColumn column)
+    {
+        // Same column flips direction; a new column starts in the direction that reads
+        // most naturally for it (A-Z for text, newest/largest first for dates and counts).
+        Config.FeedSortDescending = Config.FeedSortColumn == column.Key
+            ? !Config.FeedSortDescending
+            : column.DescendingFirst;
+        Config.FeedSortColumn = column.Key;
+        Config.Save();
+        await LoadFeedsAsync();
     }
 
     private async Task ToggleAutoDownloadAsync(int feedId, ChangeEventArgs e)
@@ -299,6 +339,12 @@ else
 
         static string Plural(int count, string unit) => $"{count} {unit}{(count == 1 ? "" : "s")} ago";
     }
+
+    /// <summary>
+    /// A clickable header: <paramref name="Key"/> is persisted, <paramref name="Selector"/>
+    /// pulls the value the column renders (null sorts first ascending / last descending).
+    /// </summary>
+    private sealed record SortColumn(string Key, string Label, bool DescendingFirst, Func<FeedRow, IComparable?> Selector);
 
     private sealed record FeedRow(int Id, string Title, FeedType Type, string Slug, int EpisodeCount, DateTime? LatestEpisodeUtc, DateTime? LastRefreshedUtc, bool AutoDownloadEnabled, int? KeepLastCount, string? LastRefreshError, bool HasArtwork);
 }

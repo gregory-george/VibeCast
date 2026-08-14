@@ -437,6 +437,49 @@ tbody tr:hover {
     background: var(--vc-surface-2);
 }
 
+/* Sortable headers (Feeds page): the button is stripped back to bare text so it
+   inherits the thead styling above and reads as a header, not a control. */
+thead th.sortable {
+    padding: 0;
+}
+
+thead th.sortable button {
+    font: inherit;
+    color: inherit;
+    text-transform: inherit;
+    letter-spacing: inherit;
+    background: none;
+    border: none;
+    border-radius: 0;
+    padding: 0.5rem 0.65rem;
+    width: 100%;
+    text-align: left;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+thead th.sortable button:hover {
+    color: var(--vc-text);
+    background: var(--vc-surface-2);
+}
+
+/* The inactive columns keep their arrow in the layout (so nothing shifts on
+   click) but only reveal it on hover, as an affordance. */
+.sort-arrow {
+    margin-left: 0.3rem;
+    opacity: 0;
+}
+
+thead th[aria-sort="none"].sortable button:hover .sort-arrow {
+    opacity: 0.45;
+}
+
+thead th[aria-sort="ascending"] .sort-arrow,
+thead th[aria-sort="descending"] .sort-arrow {
+    opacity: 1;
+    color: var(--vc-accent);
+}
+
 .error {
     color: var(--vc-danger);
 }
