@@ -4,7 +4,8 @@ namespace VibeCast.Downloads;
 
 /// <summary>
 /// Decides whether a newly-ingested episode should be auto-downloaded: RSS
-/// enclosures only (YouTube never downloads), per-feed auto-download toggle, and
+/// enclosures only (YouTube never downloads), the per-feed pause flag, the per-feed
+/// auto-download toggle, and
 /// the per-feed max-age cutoff (null = no limit). Evaluated once at ingest time --
 /// an episode that ages past the cutoff while still undownloaded simply never
 /// auto-downloads; it is not retroactively purged. Also skips episodes already
@@ -21,6 +22,11 @@ internal static class AutoDownloadGate
         }
 
         if (episode.IsPlayed || episode.IsArchived)
+        {
+            return false;
+        }
+
+        if (feed.IsPaused)
         {
             return false;
         }

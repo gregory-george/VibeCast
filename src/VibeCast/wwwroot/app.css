@@ -437,6 +437,43 @@ tbody tr:hover {
     background: var(--vc-surface-2);
 }
 
+/* Paused feeds (Feeds page): strike through the whole row so a disabled feed is
+   unmistakable at a glance. Controls opt back out -- a struck-through "Resume"
+   button would read as unavailable, which is the opposite of the point. (The
+   checkbox/number inputs are inline-block and don't inherit the decoration, but
+   they're listed for the muted color.) */
+tbody tr.paused td {
+    text-decoration: line-through;
+    color: var(--vc-text-faint);
+}
+
+tbody tr.paused td button,
+tbody tr.paused td input {
+    text-decoration: none;
+    color: var(--vc-text);
+}
+
+tbody tr.paused td button.danger {
+    color: var(--vc-danger);
+}
+
+tbody tr.paused img {
+    opacity: 0.45;
+}
+
+.paused-badge {
+    display: inline-block;
+    margin-left: 0.4rem;
+    padding: 0.05rem 0.35rem;
+    border: 1px solid var(--vc-border-strong);
+    border-radius: 999px;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    text-decoration: none;
+    color: var(--vc-text-muted);
+}
+
 /* Sortable headers (Feeds page): the button is stripped back to bare text so it
    inherits the thead styling above and reads as a header, not a control. */
 thead th.sortable {

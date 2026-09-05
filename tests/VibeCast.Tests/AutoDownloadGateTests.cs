@@ -56,6 +56,15 @@ public class AutoDownloadGateTests
     }
 
     [Fact]
+    public void PausedFeed_IsSkipped()
+    {
+        // A paused feed keeps AutoDownloadEnabled untouched, so pause has to gate on its own.
+        var feed = NewFeed();
+        feed.IsPaused = true;
+        Assert.False(AutoDownloadGate.ShouldAutoDownload(feed, NewEpisode()));
+    }
+
+    [Fact]
     public void FeedWithAutoDownloadDisabled_IsSkipped()
     {
         Assert.False(AutoDownloadGate.ShouldAutoDownload(NewFeed(autoDownload: false), NewEpisode()));

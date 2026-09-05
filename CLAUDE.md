@@ -192,6 +192,12 @@ These are the things that silently break the app if violated.
   clamped **30–180**). The interval is re-read from `AppConfig` before each wait, so a Settings
   change applies on the next cycle without a restart; the first timed refresh fires one full
   interval after startup (launch-time refresh stays `RefreshOnOpen`'s job).
+- **Paused feeds** (`Feed.IsPaused`, toggled from the Feeds page) are excluded from
+  `RefreshAllAsync` entirely — periodic timer, refresh-on-open and "Refresh all" all skip
+  them — and never auto-download (the `AutoDownloadGate` and the startup sweep both check
+  the flag). Pausing touches nothing else: episodes, downloaded files and retention are
+  left as-is, so resuming just puts the feed back in the rotation. A paused row renders
+  struck-through on the Feeds page and hides its per-feed Refresh button.
 - **Refresh is concurrent but bounded** (4 feeds at a time — WAL is single-writer; the 30 s
   busy timeout absorbs the write contention). Each fetch retries **transient** failures only
   (timeout / 408 / 429 / 5xx / transport; 3 attempts, exponential backoff) — other 4xx and

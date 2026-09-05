@@ -44,7 +44,8 @@ internal sealed class FeedRefreshService(
         List<int> feedIds;
         await using (var db = await dbContextFactory.CreateDbContextAsync(ct))
         {
-            feedIds = await db.Feeds.Select(f => f.Id).ToListAsync(ct);
+            // Paused feeds are excluded from the batch entirely -- that's what pausing means.
+            feedIds = await db.Feeds.Where(f => !f.IsPaused).Select(f => f.Id).ToListAsync(ct);
         }
 
         var options = new ParallelOptions
@@ -76,6 +77,14 @@ internal sealed class FeedRefreshService(
         if (feed is null)
         {
             return FeedRefreshResult.Failed("Feed not found.");
+        }
+
+        if (feed.IsPaused)
+        {
+            // Belt-and-braces: RefreshAllAsync already filters these out, and the Feeds page
+            // hides the per-feed Refresh button while paused. Not a feed-health failure, so
+            // LastRefreshError is deliberately left untouched.
+            return FeedRefreshResult.Failed("Feed is paused.");
         }
 
         ParsedFeed parsed;

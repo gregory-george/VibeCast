@@ -66,14 +66,20 @@ else
         <tbody>
             @foreach (var feed in feeds)
             {
-                <tr>
+                <tr class="@(feed.IsPaused ? "paused" : null)">
                     <td>
                         @if (feed.HasArtwork)
                         {
                             <img src="/media/feeds/@(feed.Id)/artwork" alt="" style="width: 2rem; height: 2rem; border-radius: 4px; object-fit: cover; vertical-align: middle;" />
                         }
                     </td>
-                    <td>@feed.Title</td>
+                    <td>
+                        @feed.Title
+                        @if (feed.IsPaused)
+                        {
+                            <span class="paused-badge">paused</span>
+                        }
+                    </td>
                     <td>@feed.Type</td>
                     <td>@feed.Slug</td>
                     <td>@feed.EpisodeCount</td>
@@ -111,7 +117,11 @@ else
                         }
                         else
                         {
-                            <button @onclick="() => RefreshOneAsync(feed.Id)">Refresh</button>
+                            @if (!feed.IsPaused)
+                            {
+                                <button @onclick="() => RefreshOneAsync(feed.Id)">Refresh</button>
+                            }
+                            <button @onclick="() => TogglePauseAsync(feed.Id)">@(feed.IsPaused ? "Resume" : "Pause")</button>
                             <button class="danger" @onclick="() => RequestDelete(feed.Id)">Delete</button>
                         }
                     </td>
@@ -157,7 +167,7 @@ else
     {
         await using var db = await DbContextFactory.CreateDbContextAsync(cts.Token);
         var rows = await db.Feeds
-            .Select(f => new FeedRow(f.Id, f.Title ?? f.OriginalUrl, f.Type, f.Slug, f.Episodes.Count, f.Episodes.Max(e => (DateTime?)e.PublishedAtUtc), f.LastRefreshedUtc, f.AutoDownloadEnabled, f.KeepLastCount, f.LastRefreshError, f.ArtworkFileName != null))
+            .Select(f => new FeedRow(f.Id, f.Title ?? f.OriginalUrl, f.Type, f.Slug, f.Episodes.Count, f.Episodes.Max(e => (DateTime?)e.PublishedAtUtc), f.LastRefreshedUtc, f.AutoDownloadEnabled, f.KeepLastCount, f.LastRefreshError, f.ArtworkFileName != null, f.IsPaused))
             .ToListAsync(cts.Token);
 
         // Ordering happens here rather than in SQL: the feed list is small, and several
@@ -180,6 +190,27 @@ else
             : column.DescendingFirst;
         Config.FeedSortColumn = column.Key;
         Config.Save();
+        await LoadFeedsAsync();
+    }
+
+    /// <summary>
+    /// Pausing takes the feed out of the refresh rotation (periodic timer and "Refresh all")
+    /// and stops auto-downloads; stored episodes and downloaded files are left untouched.
+    /// </summary>
+    private async Task TogglePauseAsync(int feedId)
+    {
+        await using var db = await DbContextFactory.CreateDbContextAsync(cts.Token);
+        var feed = await db.Feeds.FindAsync([feedId], cts.Token);
+        if (feed is null)
+        {
+            return;
+        }
+
+        feed.IsPaused = !feed.IsPaused;
+        await db.SaveChangesAsync(cts.Token);
+        statusMessage = feed.IsPaused
+            ? $"Paused \"{feed.Title ?? feed.OriginalUrl}\" - it will not refresh or download until resumed."
+            : $"Resumed \"{feed.Title ?? feed.OriginalUrl}\".";
         await LoadFeedsAsync();
     }
 
@@ -346,5 +377,5 @@ else
     /// </summary>
     private sealed record SortColumn(string Key, string Label, bool DescendingFirst, Func<FeedRow, IComparable?> Selector);
 
-    private sealed record FeedRow(int Id, string Title, FeedType Type, string Slug, int EpisodeCount, DateTime? LatestEpisodeUtc, DateTime? LastRefreshedUtc, bool AutoDownloadEnabled, int? KeepLastCount, string? LastRefreshError, bool HasArtwork);
+    private sealed record FeedRow(int Id, string Title, FeedType Type, string Slug, int EpisodeCount, DateTime? LatestEpisodeUtc, DateTime? LastRefreshedUtc, bool AutoDownloadEnabled, int? KeepLastCount, string? LastRefreshError, bool HasArtwork, bool IsPaused);
 }

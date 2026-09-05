@@ -40,6 +40,13 @@ internal sealed class Feed
     /// <summary>YouTube only: swaps the feed URL to the UULF long-form playlist (excludes Shorts).</summary>
     public bool ExcludeShorts { get; set; }
 
+    /// <summary>
+    /// User-paused: the feed is skipped entirely by refresh (both the periodic timer and
+    /// "Refresh all") and never auto-downloads. Existing episodes and downloaded files are
+    /// left alone -- pausing is a "stop pulling new stuff", not a retention action.
+    /// </summary>
+    public bool IsPaused { get; set; }
+
     /// <summary>Per-feed override of the global auto-download-all-new default.</summary>
     public bool AutoDownloadEnabled { get; set; } = true;
 

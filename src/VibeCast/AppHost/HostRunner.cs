@@ -150,7 +150,7 @@ internal static class HostRunner
             await using var db = await factory.CreateDbContextAsync(ct);
             var pending = await db.Episodes
                 .Include(e => e.Feed)
-                .Where(e => e.EnclosureUrl != null && !e.IsDownloaded && !e.IsArchived && !e.IsPlayed && e.Feed.AutoDownloadEnabled)
+                .Where(e => e.EnclosureUrl != null && !e.IsDownloaded && !e.IsArchived && !e.IsPlayed && e.Feed.AutoDownloadEnabled && !e.Feed.IsPaused)
                 .ToListAsync(ct);
 
             foreach (var episode in pending)
