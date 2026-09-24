@@ -2,6 +2,7 @@ using System.Net;
 using System.Xml;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using VibeCast.AppHost;
 using VibeCast.Data;
 using VibeCast.Downloads;
 using VibeCast.Retention;
@@ -12,6 +13,8 @@ namespace VibeCast.Feeds;
 /// Purely additive refresh: pulls the current feed contents, adds episodes not
 /// already stored (by DedupKey), and never removes ones that aged out of the
 /// feed's window. The DB is the source of truth, the feed is discovery only.
+/// Unplayed episodes still in the window get their metadata updated from the
+/// feed; played/archived episodes are never touched.
 /// </summary>
 internal sealed class FeedRefreshService(
     IDbContextFactory<AppDbContext> dbContextFactory,
@@ -131,11 +134,22 @@ internal sealed class FeedRefreshService(
             .Select(e => e.DedupKey)
             .ToHashSetAsync(ct);
 
+        // Unplayed episodes still in the feed window pick up the feed's latest metadata
+        // (publishers fix titles, show notes, artwork...). Played/archived rows are frozen.
+        var unplayedByKey = await db.Episodes
+            .Where(e => e.FeedId == feed.Id && !e.IsPlayed && !e.IsArchived)
+            .ToDictionaryAsync(e => e.DedupKey, ct);
+
         var newEpisodes = new List<Episode>();
         foreach (var parsedEpisode in parsed.Episodes)
         {
             if (!existingKeys.Add(parsedEpisode.DedupKey))
             {
+                if (unplayedByKey.TryGetValue(parsedEpisode.DedupKey, out var existing))
+                {
+                    ApplyMetadata(existing, parsedEpisode, feed.Slug);
+                }
+
                 continue;
             }
 
@@ -174,6 +188,64 @@ internal sealed class FeedRefreshService(
         await retentionService.EnforceFeedAsync(feed.Id, ct);
 
         return FeedRefreshResult.Ok(newEpisodes.Count);
+    }
+
+    /// <summary>
+    /// Refreshes an existing unplayed episode's metadata from the feed. Only overwrites
+    /// with values the feed actually supplies, so a sparser feed (or YouTube's duration-less
+    /// videos.xml, whose durations are scraped separately) never blanks stored data.
+    /// </summary>
+    internal static void ApplyMetadata(Episode episode, ParsedEpisode parsed, string feedSlug)
+    {
+        if (!string.IsNullOrWhiteSpace(parsed.DescriptionHtml))
+        {
+            episode.DescriptionHtml = parsed.DescriptionHtml;
+        }
+
+        if (!string.IsNullOrWhiteSpace(parsed.ArtworkUrl))
+        {
+            episode.ArtworkUrl = parsed.ArtworkUrl;
+        }
+
+        if (parsed.DurationSeconds is > 0)
+        {
+            episode.DurationSeconds = parsed.DurationSeconds;
+        }
+
+        // Title, date and media type feed the download file name (DownloadFileNaming), and
+        // the enclosure is what gets fetched. Once downloaded the stored DownloadedFileName
+        // decouples the name, but the file on disk is still the old enclosure -- so the
+        // enclosure (and the media type it's served with) stays pinned to it. While a
+        // .partial exists (interrupted or in-flight download) hold all of them, or the
+        // resume would target a different path/URL and orphan the partial file.
+        if (!episode.IsDownloaded && HasPartialDownload(episode, feedSlug))
+        {
+            return;
+        }
+
+        episode.Title = parsed.Title;
+
+        if (parsed.HasPublishedDate)
+        {
+            episode.PublishedAtUtc = parsed.PublishedAtUtc.UtcDateTime;
+        }
+
+        if (!episode.IsDownloaded && !string.IsNullOrWhiteSpace(parsed.EnclosureUrl))
+        {
+            episode.EnclosureUrl = parsed.EnclosureUrl;
+            episode.EnclosureMediaType = parsed.EnclosureMediaType;
+        }
+    }
+
+    private static bool HasPartialDownload(Episode episode, string feedSlug)
+    {
+        if (episode.EnclosureUrl is null)
+        {
+            return false; // YouTube -- never downloaded
+        }
+
+        var finalPath = Path.Combine(AppPaths.DownloadsDirectory, feedSlug, DownloadFileNaming.BuildFileName(episode));
+        return File.Exists(finalPath + ".partial");
     }
 
     /// <summary>

@@ -124,14 +124,19 @@ internal static class FeedDocumentParser
 
     private static ParsedEpisode BuildParsedEpisode(RawEpisodeFields raw)
     {
+        // Unknown/unparsable date: assume today. Consistent with the 90-day
+        // auto-download cutoff's "unknown date -> today" rule (CLAUDE.md).
+        var publishedAtUtc = raw.PublishedAtUtc ?? DateTimeOffset.UtcNow;
+
         var dedupKey = string.IsNullOrWhiteSpace(raw.YouTubeVideoId)
-            ? DedupKeyComputer.ForRss(raw.Guid, raw.EnclosureUrl, raw.Title, raw.PublishedAtUtc)
+            ? DedupKeyComputer.ForRss(raw.Guid, raw.EnclosureUrl, raw.Title, publishedAtUtc)
             : DedupKeyComputer.ForYouTube(raw.YouTubeVideoId);
 
         return new ParsedEpisode(
             dedupKey,
             raw.Title,
-            raw.PublishedAtUtc,
+            publishedAtUtc,
+            HasPublishedDate: raw.PublishedAtUtc is not null,
             raw.DescriptionHtml,
             raw.ArtworkUrl,
             raw.DurationSeconds,
@@ -161,11 +166,12 @@ internal static class FeedDocumentParser
     private static readonly Regex TrailingRfcZone = new(
         @"\s([A-Za-z]{2,3})$", RegexOptions.Compiled);
 
-    private static DateTimeOffset ParseDate(string? raw)
+    // Null = missing/unparsable; BuildParsedEpisode resolves that to "today".
+    private static DateTimeOffset? ParseDate(string? raw)
     {
         if (string.IsNullOrWhiteSpace(raw))
         {
-            return DateTimeOffset.UtcNow;
+            return null;
         }
 
         if (DateTimeOffset.TryParse(raw, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var parsed))
@@ -183,9 +189,7 @@ internal static class FeedDocumentParser
             }
         }
 
-        // Unknown/unparsable date: assume today. Consistent with the 90-day
-        // auto-download cutoff's "unknown date -> today" rule (CLAUDE.md).
-        return DateTimeOffset.UtcNow;
+        return null;
     }
 
     private static int? ParseItunesDuration(string? raw)
@@ -218,7 +222,7 @@ internal static class FeedDocumentParser
     private sealed record RawEpisodeFields(
         string? Guid,
         string Title,
-        DateTimeOffset PublishedAtUtc,
+        DateTimeOffset? PublishedAtUtc,
         string? DescriptionHtml,
         string? ArtworkUrl,
         int? DurationSeconds,

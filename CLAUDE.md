@@ -162,7 +162,12 @@ These are the things that silently break the app if violated.
 - **Additive feed model.** Refresh **adds** new items and **never removes** ones that aged out
   of the feed window. The **DB is the source of truth**; the feed is discovery only. (Deleting
   a feed is the one deliberate, user-confirmed exception — it wipes the rows and the
-  `downloads/<slug>` folder.)
+  `downloads/<slug>` folder.) Refresh **does** update metadata (title, show notes, artwork,
+  duration, pubdate, enclosure) on **unplayed, unarchived** episodes still in the feed window —
+  only with values the feed actually supplies (never blanks stored data; a missing pubdate never
+  re-stamps "today"). Played/archived rows are frozen. A downloaded episode's enclosure URL/media
+  type stay pinned to the file on disk, and while a `.partial` exists the name-driving fields
+  (title/date/enclosure) are held so the resume isn't orphaned.
 - **Composite de-dup key**, computed once at ingest (`Feeds/DedupKeyComputer`) and stored in a
   dedicated **`DedupKey`** column, enforced by a unique index scoped `(FeedId, DedupKey)`.
   Keys are source-prefixed for debuggability:
