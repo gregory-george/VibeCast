@@ -246,10 +246,39 @@ public class EpisodeStateServiceTests
         var service = BuildService(factory, new DownloadProgressTracker());
         var episodeId = await SeedYouTubeEpisodeAsync(factory);
 
-        await service.SavePlaybackPositionAsync(episodeId, 754, CancellationToken.None);
+        var saved = await service.SavePlaybackPositionAsync(episodeId, 754, CancellationToken.None);
 
+        Assert.True(saved);
         var episode = await LoadEpisodeAsync(factory, episodeId);
         Assert.Equal(754, episode.PlaybackPositionSeconds);
+    }
+
+    [Fact]
+    public async Task SavePlaybackPosition_ZeroResetsStoredPosition()
+    {
+        using var factory = new TestDbContextFactory();
+        var service = BuildService(factory, new DownloadProgressTracker());
+        var episodeId = await SeedYouTubeEpisodeAsync(factory);
+        await service.SavePlaybackPositionAsync(episodeId, 754, CancellationToken.None);
+
+        await service.SavePlaybackPositionAsync(episodeId, 0, CancellationToken.None);
+
+        var episode = await LoadEpisodeAsync(factory, episodeId);
+        Assert.Equal(0, episode.PlaybackPositionSeconds);
+    }
+
+    [Fact]
+    public async Task SavePlaybackPosition_SkipsPlayedEpisode()
+    {
+        using var factory = new TestDbContextFactory();
+        var service = BuildService(factory, new DownloadProgressTracker());
+        var episodeId = await SeedYouTubeEpisodeAsync(factory, played: true);
+
+        var saved = await service.SavePlaybackPositionAsync(episodeId, 754, CancellationToken.None);
+
+        Assert.False(saved);
+        var episode = await LoadEpisodeAsync(factory, episodeId);
+        Assert.Equal(0, episode.PlaybackPositionSeconds);
     }
 
     private static EpisodeStateService BuildService(TestDbContextFactory factory, DownloadProgressTracker tracker) =>

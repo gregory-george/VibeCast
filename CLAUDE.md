@@ -177,9 +177,14 @@ These are the things that silently break the app if violated.
   `archived` are tracked as **distinct flags** even though they currently move together. There
   is **no stored `new` flag** — "new" is the derived default (none of the above).
 - **Resume position:** `PlaybackPositionSeconds` per episode so the in-app player resumes where
-  the user left off. Saved by a ~5 s periodic timer while an episode is open — there is **no**
-  explicit flush on pause/stop/close, so the last few seconds can be lost. Becomes irrelevant
-  once the item is played (RSS file is deleted at that point).
+  the user left off (`0` = start from the beginning). Saved on **pause**, on **stop/close and
+  switching episodes** (in `NowPlaying.OnPlaybackChanged`, before the render tears the old
+  player down), and by a ~5 s periodic timer while playing. Reaching the **end resets it to 0**;
+  a zero reading otherwise never overwrites a stored position. Saves are keyed to the episode
+  actually loaded in the player (JS events carry their episode id), never
+  `PlaybackService.Current`, which flips before the new player loads. **Only unplayed episodes
+  are written** (`SavePlaybackPositionAsync` skips played rows). The episode list shows a
+  non-zero position as a badge, patched live via `PlaybackService.PositionSaved`.
 
 ## Behavioral invariants
 

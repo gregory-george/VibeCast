@@ -22,7 +22,7 @@ function ensureApiLoaded() {
     });
 }
 
-export async function init(elementId, videoId, startSeconds, dotNetRef, captionsEnabled) {
+export async function init(elementId, videoId, startSeconds, dotNetRef, captionsEnabled, episodeId) {
     await ensureApiLoaded();
     if (player) {
         player.destroy();
@@ -39,7 +39,8 @@ export async function init(elementId, videoId, startSeconds, dotNetRef, captions
                 events: {
                     onReady: () => resolve(),
                     onError: (e) => console.error('[vibecast-yt] player error', e.data),
-                    onStateChange: (e) => dotNetRef.invokeMethodAsync('OnYouTubeStateChange', e.data),
+                    // Pass the episode id and position with the event (see audioPlayer.js).
+                    onStateChange: (e) => dotNetRef.invokeMethodAsync('OnYouTubeStateChange', episodeId, e.data, e.target.getCurrentTime() || 0),
                 },
             });
         } catch (e) {
@@ -93,4 +94,12 @@ export function seekTo(seconds) {
     if (player) {
         player.seekTo(seconds, true);
     }
+}
+
+// 0 once the video has ended (YT.PlayerState.ENDED), mirroring audioPlayer.js.
+export function getResumePosition() {
+    if (!player) {
+        return 0;
+    }
+    return player.getPlayerState() === 0 ? 0 : (player.getCurrentTime() || 0);
 }

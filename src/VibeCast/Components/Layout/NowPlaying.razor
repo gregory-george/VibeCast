@@ -188,16 +188,23 @@ else if (PlaybackService.PendingPlayError is { } pendingError)
 
     private void DismissPendingPlayError() => PlaybackService.DismissPendingPlayError();
 
-    private void OnPlaybackChanged()
+    private void OnPlaybackChanged() => _ = InvokeAsync(async () =>
     {
+        // Stopping or switching episodes: remember where the outgoing episode was left
+        // while its player is still in the DOM (the render below tears it down).
+        if (loadedEpisodeId is { } loaded && PlaybackService.Current?.EpisodeId != loaded)
+        {
+            await SaveLoadedPositionAsync(notify: true, CancellationToken.None);
+            loadedEpisodeId = null;
+        }
+
         if (PlaybackService.Current is null)
         {
-            loadedEpisodeId = null;
             isExpanded = false;
         }
 
-        InvokeAsync(StateHasChanged);
-    }
+        StateHasChanged();
+    });
 
     private async Task ToggleExpanded()
     {
@@ -248,7 +255,7 @@ else if (PlaybackService.PendingPlayError is { } pendingError)
         {
             audioModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/audioPlayer.js");
             await audioModule.InvokeVoidAsync("init", audioElement, dotNetRef);
-            await audioModule.InvokeVoidAsync("setSource", audioElement, current.MediaUrl, current.InitialPositionSeconds);
+            await audioModule.InvokeVoidAsync("setSource", audioElement, current.MediaUrl, current.InitialPositionSeconds, current.EpisodeId);
             // Snap to the closest selectable step so a config value that isn't an exact
             // step (e.g. 1.75) still selects an option instead of showing a blank control.
             rssRate = RssRates.OrderBy(r => Math.Abs(r - Config.DefaultPlaybackSpeed)).First();
@@ -258,7 +265,7 @@ else if (PlaybackService.PendingPlayError is { } pendingError)
         {
             youtubeModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/youtubePlayer.js");
             ccEnabled = Config.ClosedCaptionsEnabled;
-            await youtubeModule.InvokeVoidAsync("init", youtubeElementId, current.YouTubeVideoId, current.InitialPositionSeconds, dotNetRef, ccEnabled);
+            await youtubeModule.InvokeVoidAsync("init", youtubeElementId, current.YouTubeVideoId, current.InitialPositionSeconds, dotNetRef, ccEnabled, current.EpisodeId);
             youtubeRates = (await youtubeModule.InvokeAsync<double[]>("getAvailablePlaybackRates")).ToList();
             // YouTube's embed only honors its own native stepped menu, so pick the
             // closest available rate to the configured default rather than faking it.
@@ -439,7 +446,21 @@ else if (PlaybackService.PendingPlayError is { } pendingError)
     }
 
     [JSInvokable]
-    public Task OnEnded() => PlaybackService.HandlePlaybackEndedAsync(CancellationToken.None);
+    public async Task OnEnded(int episodeId)
+    {
+        // Finished: the next play starts from the beginning rather than the end.
+        await SaveExplicitPositionAsync(episodeId, 0);
+        await PlaybackService.HandlePlaybackEndedAsync(CancellationToken.None);
+    }
+
+    [JSInvokable]
+    public Task OnPaused(int episodeId, double seconds) =>
+        seconds > 0 ? SaveExplicitPositionAsync(episodeId, seconds) : Task.CompletedTask;
+
+    private Task SaveExplicitPositionAsync(int episodeId, double seconds) =>
+        episodeId > 0
+            ? PlaybackService.SavePositionAsync(episodeId, (int)seconds, notify: true, CancellationToken.None)
+            : Task.CompletedTask;
 
     [JSInvokable]
     public Task OnPlayStateChanged(bool playing)
@@ -453,7 +474,7 @@ else if (PlaybackService.PendingPlayError is { } pendingError)
     private const int YouTubeStatePaused = 2;
 
     [JSInvokable]
-    public Task OnYouTubeStateChange(int state)
+    public Task OnYouTubeStateChange(int episodeId, int state, double seconds)
     {
         if (state is YouTubeStatePlaying or YouTubeStatePaused or YouTubeStateEnded)
         {
@@ -461,7 +482,12 @@ else if (PlaybackService.PendingPlayError is { } pendingError)
             StateHasChanged();
         }
 
-        return state == YouTubeStateEnded ? PlaybackService.HandlePlaybackEndedAsync(CancellationToken.None) : Task.CompletedTask;
+        return state switch
+        {
+            YouTubeStateEnded => OnEnded(episodeId),
+            YouTubeStatePaused => OnPaused(episodeId, seconds),
+            _ => Task.CompletedTask,
+        };
     }
 
     private async Task SavePositionLoopAsync(CancellationToken ct)
@@ -470,7 +496,7 @@ else if (PlaybackService.PendingPlayError is { } pendingError)
         {
             while (saveTimer is not null && await saveTimer.WaitForNextTickAsync(ct))
             {
-                await SaveCurrentPositionAsync(ct);
+                await SaveLoadedPositionAsync(notify: false, ct);
             }
         }
         catch (OperationCanceledException)
@@ -478,26 +504,35 @@ else if (PlaybackService.PendingPlayError is { } pendingError)
         }
     }
 
-    private async Task SaveCurrentPositionAsync(CancellationToken ct)
+    /// <summary>
+    /// Saves the position of the episode actually loaded in the player. Keyed off
+    /// <c>loadedEpisodeId</c> rather than <c>PlaybackService.Current</c>, which flips to
+    /// the next episode before its player has loaded -- reading Current would write the
+    /// old player's time onto the new episode. A zero reading (not yet seeked, or
+    /// finished -- see getResumePosition) never overwrites a stored position.
+    /// </summary>
+    private async Task SaveLoadedPositionAsync(bool notify, CancellationToken ct)
     {
-        var current = PlaybackService.Current;
-        if (current is null)
+        if (loadedEpisodeId is not { } episodeId)
         {
             return;
         }
 
         try
         {
-            double seconds = current.IsRss
-                ? audioModule is null ? 0 : await audioModule.InvokeAsync<double>("getCurrentTime", audioElement)
-                : youtubeModule is null ? 0 : await youtubeModule.InvokeAsync<double>("getCurrentTime");
+            double seconds = loadedIsRss
+                ? audioModule is null ? 0 : await audioModule.InvokeAsync<double>("getResumePosition", audioElement)
+                : youtubeModule is null ? 0 : await youtubeModule.InvokeAsync<double>("getResumePosition");
 
             if (seconds > 0)
             {
-                await PlaybackService.SavePositionAsync(current.EpisodeId, (int)seconds, ct);
+                await PlaybackService.SavePositionAsync(episodeId, (int)seconds, notify, ct);
             }
         }
         catch (JSDisconnectedException)
+        {
+        }
+        catch (JSException)
         {
         }
         catch (ObjectDisposedException)
@@ -535,7 +570,7 @@ else if (PlaybackService.PendingPlayError is { } pendingError)
         {
         }
 
-        loadedEpisodeId = null;
+        // loadedEpisodeId is left set: OnPlaybackChanged saves its position, then clears it.
         isExpanded = false;
         PlaybackService.Stop();
     }

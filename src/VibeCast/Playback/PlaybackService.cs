@@ -111,8 +111,25 @@ internal sealed class PlaybackService : IDisposable
             ArtworkUrl: BuildArtworkUrl(episode.Feed)));
     }
 
-    public Task SavePositionAsync(int episodeId, int positionSeconds, CancellationToken ct) =>
-        episodeStateService.SavePlaybackPositionAsync(episodeId, positionSeconds, ct);
+    /// <summary>
+    /// Raised after a pause/stop/end save lands (not the periodic in-play save), with the
+    /// episode id and saved position, so the episode list can refresh its resume badge.
+    /// </summary>
+    public event Action<int, int>? PositionSaved;
+
+    /// <summary>
+    /// Persists the resume position of an unplayed episode. <paramref name="notify"/>
+    /// raises <see cref="PositionSaved"/>; the ~5 s periodic save passes false so the
+    /// episode list doesn't re-render on every tick while something is playing.
+    /// </summary>
+    public async Task SavePositionAsync(int episodeId, int positionSeconds, bool notify, CancellationToken ct)
+    {
+        var saved = await episodeStateService.SavePlaybackPositionAsync(episodeId, positionSeconds, ct);
+        if (saved && notify)
+        {
+            PositionSaved?.Invoke(episodeId, positionSeconds);
+        }
+    }
 
     /// <summary>
     /// Called when the in-app player reaches the end of the current episode. Only

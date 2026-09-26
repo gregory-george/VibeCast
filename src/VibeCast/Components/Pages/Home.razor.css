@@ -212,7 +212,8 @@
 .shorts-badge,
 .upcoming-badge,
 .streaming-badge,
-.downloaded-badge {
+.downloaded-badge,
+.position-badge {
     display: inline-block;
     margin-left: 0.4rem;
     padding: 0.05rem 0.4rem;
@@ -242,6 +243,12 @@
 .downloaded-badge {
     border: 1px solid var(--vc-success);
     color: var(--vc-success);
+}
+
+.position-badge {
+    background: var(--vc-accent);
+    color: var(--vc-on-accent);
+    font-variant-numeric: tabular-nums;
 }
 
 .episode-detail {

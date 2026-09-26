@@ -139,20 +139,22 @@ internal sealed class EpisodeStateService(
     }
 
     /// <summary>
-    /// Persists resume position. Meaningless once the file is gone (mark-as-played
-    /// deletes the RSS file), but harmless to call -- the row simply stops being read
-    /// back by anything once IsPlayed flips.
+    /// Persists resume position for an unplayed episode. Played episodes are skipped:
+    /// the position is meaningless once the item is played (mark-as-played deletes the
+    /// RSS file), and a save racing a mark-as-played mustn't resurrect a stale one.
+    /// Returns whether the position was written.
     /// </summary>
-    public async Task SavePlaybackPositionAsync(int episodeId, int positionSeconds, CancellationToken ct)
+    public async Task<bool> SavePlaybackPositionAsync(int episodeId, int positionSeconds, CancellationToken ct)
     {
         await using var db = await dbContextFactory.CreateDbContextAsync(ct);
         var episode = await db.Episodes.FindAsync([episodeId], ct);
-        if (episode is null)
+        if (episode is null || episode.IsPlayed)
         {
-            return;
+            return false;
         }
 
-        episode.PlaybackPositionSeconds = positionSeconds;
+        episode.PlaybackPositionSeconds = Math.Max(0, positionSeconds);
         await db.SaveChangesAsync(ct);
+        return true;
     }
 }

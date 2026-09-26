@@ -106,6 +106,10 @@
                             {
                                 <span class="downloaded-badge" title="Downloaded and ready to play offline">Downloaded</span>
                             }
+                            @if (episode.ResumeSeconds > 0)
+                            {
+                                <span class="position-badge" title="Resumes from @FormatDuration(episode.ResumeSeconds)">@FormatDuration(episode.ResumeSeconds)</span>
+                            }
                         </div>
                         <div class="episode-meta">
                             @episode.FeedTitle &middot; @episode.PublishedAtUtc.ToLocalTime().ToString("MMM d, yyyy") &middot; @FormatDurationOrSchedule(episode.DurationSeconds, episode.ScheduledStartUtc) &middot; @FormatFileSize(episode.FileSizeBytes)
@@ -213,11 +217,24 @@
     protected override async Task OnInitializedAsync()
     {
         ProgressTracker.Changed += OnProgressChanged;
+        PlaybackService.PositionSaved += OnPositionSaved;
         await LoadFeedsAsync();
         await LoadEpisodesAsync();
     }
 
     private void OnProgressChanged() => InvokeAsync(StateHasChanged);
+
+    // A pause/stop in the player just saved a resume position; patch that row's badge in
+    // place rather than re-querying the whole list.
+    private void OnPositionSaved(int episodeId, int positionSeconds) => InvokeAsync(() =>
+    {
+        var index = episodes?.FindIndex(e => e.Id == episodeId) ?? -1;
+        if (index >= 0 && episodes![index].ResumeSeconds != positionSeconds)
+        {
+            episodes[index] = episodes[index] with { ResumeSeconds = positionSeconds };
+            StateHasChanged();
+        }
+    });
 
     private async Task LoadFeedsAsync()
     {
@@ -261,6 +278,8 @@
                 e.IsDownloaded,
                 FeedSlug = e.Feed.Slug,
                 e.DownloadedFileName,
+                // Resume position only means something on an unplayed episode.
+                ResumeSeconds = e.IsPlayed ? 0 : e.PlaybackPositionSeconds,
             })
             .Take(200)
             .ToListAsync(cts.Token);
@@ -271,7 +290,7 @@
                 // The flag can outlive the file (mark-as-played defers a locked delete), so
                 // the badge follows what is actually on disk.
                 var fileSize = GetFileSize(r.FeedSlug, r.DownloadedFileName);
-                return new EpisodeListItem(r.Id, r.Title, r.FeedTitle, r.PublishedAtUtc, r.DurationSeconds, r.ScheduledStartUtc, r.IsShort, r.IsStreaming, r.IsDownloaded && fileSize is not null, fileSize);
+                return new EpisodeListItem(r.Id, r.Title, r.FeedTitle, r.PublishedAtUtc, r.DurationSeconds, r.ScheduledStartUtc, r.IsShort, r.IsStreaming, r.IsDownloaded && fileSize is not null, fileSize, r.ResumeSeconds);
             })
             .ToList();
     }
@@ -509,13 +528,14 @@
     public void Dispose()
     {
         ProgressTracker.Changed -= OnProgressChanged;
+        PlaybackService.PositionSaved -= OnPositionSaved;
         cts.Cancel();
         cts.Dispose();
     }
 
     private sealed record FeedSummary(int Id, string Title, int ActiveCount, long UnplayedSeconds, bool HasArtwork);
 
-    private sealed record EpisodeListItem(int Id, string Title, string FeedTitle, DateTime PublishedAtUtc, int? DurationSeconds, DateTime? ScheduledStartUtc, bool IsShort, bool IsStreaming, bool IsDownloaded, long? FileSizeBytes);
+    private sealed record EpisodeListItem(int Id, string Title, string FeedTitle, DateTime PublishedAtUtc, int? DurationSeconds, DateTime? ScheduledStartUtc, bool IsShort, bool IsStreaming, bool IsDownloaded, long? FileSizeBytes, int ResumeSeconds);
 
     private sealed record EpisodeDetail(int Id, string Title, string FeedTitle, DateTime PublishedAtUtc, int? DurationSeconds, DateTime? ScheduledStartUtc, string? DescriptionHtml, bool IsPlayed, bool IsArchived, bool IsRss, bool IsShort, bool IsDownloaded, long? FileSizeBytes);
 }
