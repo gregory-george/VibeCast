@@ -70,7 +70,7 @@
                     <button class="@(Filters.ChangedCount() > 0 ? "filter-button filtered" : "filter-button")"
                             aria-haspopup="menu" aria-expanded="@(filterMenuOpen ? "true" : "false")"
                             title="Choose which episodes the list shows"
-                            @onclick="() => filterMenuOpen = !filterMenuOpen">
+                            @onclick="ToggleFilterMenuAsync">
                         @FilterButtonText
                     </button>
                     @if (filterMenuOpen)
@@ -78,18 +78,18 @@
                         <div class="filter-backdrop" @onclick="() => filterMenuOpen = false"></div>
                         <div class="filter-dropdown" role="menu">
                             <div class="filter-group-label">Status</div>
-                            @FilterItem("Unplayed", "Episodes not yet played/archived", Filters.Unplayed, v => Filters.Unplayed = v)
-                            @FilterItem("Archived", "Played episodes moved to the archive", Filters.Archived, v => Filters.Archived = v)
+                            @FilterItem("Unplayed", "Episodes not yet played/archived", Filters.Unplayed, filterCounts?.Unplayed, v => Filters.Unplayed = v)
+                            @FilterItem("Archived", "Played episodes moved to the archive", Filters.Archived, filterCounts?.Archived, v => Filters.Archived = v)
                             <div class="filter-group-label">Type</div>
-                            @FilterItem("Shorts", "YouTube Shorts (5 minutes or less)", Filters.Shorts, v => Filters.Shorts = v)
-                            @FilterItem("Longs", "Everything that isn't a Short, podcasts included", Filters.Longs, v => Filters.Longs = v)
+                            @FilterItem("Shorts", "YouTube Shorts (5 minutes or less)", Filters.Shorts, filterCounts?.Shorts, v => Filters.Shorts = v)
+                            @FilterItem("Longs", "Everything that isn't a Short, podcasts included", Filters.Longs, filterCounts?.Longs, v => Filters.Longs = v)
                             <div class="filter-group-label">Source</div>
-                            @FilterItem("Downloaded", "Podcast episodes on disk", Filters.Downloaded, v => Filters.Downloaded = v)
-                            @FilterItem("Not downloaded", "Podcast episodes not on disk (queued, failed, or past the auto-download cutoff)", Filters.NotDownloaded, v => Filters.NotDownloaded = v)
-                            @FilterItem("Streamed", "YouTube videos that have aired", Filters.Streamed, v => Filters.Streamed = v)
-                            @FilterItem("Upcoming", "YouTube premieres that haven't aired yet", Filters.Upcoming, v => Filters.Upcoming = v)
+                            @FilterItem("Downloaded", "Podcast episodes on disk", Filters.Downloaded, filterCounts?.Downloaded, v => Filters.Downloaded = v)
+                            @FilterItem("Not downloaded", "Podcast episodes not on disk (queued, failed, or past the auto-download cutoff)", Filters.NotDownloaded, filterCounts?.NotDownloaded, v => Filters.NotDownloaded = v)
+                            @FilterItem("Streamed", "YouTube videos that have aired", Filters.Streamed, filterCounts?.Streamed, v => Filters.Streamed = v)
+                            @FilterItem("Upcoming", "YouTube premieres that haven't aired yet", Filters.Upcoming, filterCounts?.Upcoming, v => Filters.Upcoming = v)
                             <div class="filter-group-label">Progress</div>
-                            @FilterItem("In progress only", "Only episodes with a saved resume position", Filters.InProgressOnly, v => Filters.InProgressOnly = v)
+                            @FilterItem("In progress only", "Only episodes with a saved resume position", Filters.InProgressOnly, filterCounts?.InProgress, v => Filters.InProgressOnly = v)
                             <hr />
                             <button class="filter-reset" role="menuitem" disabled="@(Filters.ChangedCount() == 0)" @onclick="ResetFiltersAsync">
                                 Reset to defaults
@@ -239,6 +239,7 @@
     private int? selectedFeedId;
     private int? selectedEpisodeId;
     private bool filterMenuOpen;
+    private EpisodeFilterCounts? filterCounts;
     private string searchText = string.Empty;
     private int loadVersion;
     private bool confirmingMarkAllPlayed;
@@ -306,12 +307,11 @@
         var filters = Config.EpisodeFilters;
 
         await using var db = await DbContextFactory.CreateDbContextAsync(cts.Token);
-        var query = filters.Apply(db.Episodes, searchText);
+        var feedEpisodes = FeedEpisodes(db);
+        var query = filters.Apply(feedEpisodes, searchText);
 
-        if (selectedFeedId is { } feedId)
-        {
-            query = query.Where(e => e.FeedId == feedId);
-        }
+        // Counts only matter while the menu is open; opening it loads them fresh.
+        var counts = filterMenuOpen ? await filters.CountAsync(feedEpisodes, searchText, cts.Token) : null;
 
         query = Config.EpisodeSortDescending
             ? query.OrderByDescending(e => e.PublishedAtUtc)
@@ -358,6 +358,7 @@
         if (version == loadVersion)
         {
             episodes = items;
+            filterCounts = counts;
         }
     }
 
@@ -391,11 +392,12 @@
 
     // One checkable row of the Filters drop-down. Clicking toggles it and leaves the menu
     // open so several filters can be changed in one go.
-    private RenderFragment FilterItem(string label, string title, bool isChecked, Action<bool> set) =>
+    private RenderFragment FilterItem(string label, string title, bool isChecked, int? count, Action<bool> set) =>
         @<button class="filter-item" role="menuitemcheckbox" aria-checked="@(isChecked ? "true" : "false")" title="@title"
                  @onclick="() => SetFilterAsync(set, !isChecked)">
             <span class="filter-check" aria-hidden="true">@(isChecked ? "✓" : null)</span>
-            @label
+            <span class="filter-label">@label</span>
+            <span class="filter-count">@count</span>
         </button>;
 
     private Task SetFilterAsync(Action<bool> set, bool value)
@@ -427,6 +429,27 @@
         {
             selectedEpisodeId = null;
             detail = null;
+        }
+    }
+
+    // The selected feed's episodes (or all of them), before any filter or search.
+    private IQueryable<Episode> FeedEpisodes(AppDbContext db) =>
+        selectedFeedId is { } feedId ? db.Episodes.Where(e => e.FeedId == feedId) : db.Episodes;
+
+    private async Task ToggleFilterMenuAsync()
+    {
+        filterMenuOpen = !filterMenuOpen;
+        if (filterMenuOpen)
+        {
+            // Blank rather than stale while the fresh counts load.
+            filterCounts = null;
+            var version = loadVersion;
+            await using var db = await DbContextFactory.CreateDbContextAsync(cts.Token);
+            var counts = await Filters.CountAsync(FeedEpisodes(db), searchText, cts.Token);
+            if (version == loadVersion)
+            {
+                filterCounts = counts;
+            }
         }
     }
 

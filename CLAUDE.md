@@ -300,7 +300,8 @@ These are the things that silently break the app if violated.
   no enclosure, ≤ 5 min) / Longs (everything else, podcasts included) · **Source** Downloaded /
   Not downloaded (RSS, by **file on disk**, not just the flag) / Streamed / Upcoming (YouTube, by
   `ScheduledStartUtc`). "In progress only" is the one restricting filter. Defaults = the plain
-  active list. A title search box beside it is per-session, not persisted. "Mark all as played"
+  active list. Each box shows a **facet count** (`EpisodeFilters.CountAsync`, loaded only while
+  the menu is open): its slice of the selected feed + search under the *other* groups' settings. A title search box beside it is per-session, not persisted. "Mark all as played"
   acts on the whole feed, so it's only offered when no filter or search narrows the list.
 - **Reconnect:** `ReconnectModal` is a custom-styled replacement for Blazor Server's default
   reconnect/resume overlay (rejoin / paused-session / retry states).

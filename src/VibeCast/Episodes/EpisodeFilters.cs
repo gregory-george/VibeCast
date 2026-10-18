@@ -120,9 +120,68 @@ internal sealed class EpisodeFilters
         return query;
     }
 
+    /// <summary>
+    /// Facet counts for the Filters menu: for each box, how many episodes of
+    /// <paramref name="query"/> fall in its slice given the *other* groups' settings
+    /// (its own group is opened up), so a count says what checking that box would show
+    /// and the counts within a group add up. Downloaded/Not downloaded go by the
+    /// <see cref="Episode.IsDownloaded"/> flag; the list's disk check can differ in the
+    /// rare flagged-but-missing case.
+    /// </summary>
+    public async Task<EpisodeFilterCounts> CountAsync(IQueryable<Episode> query, string? titleSearch, CancellationToken cancellationToken)
+    {
+        var status = await With(f => (f.Unplayed, f.Archived) = (true, true)).Apply(query, titleSearch)
+            .GroupBy(_ => 1)
+            .Select(g => new { Unplayed = g.Count(e => !e.IsArchived), Archived = g.Count(e => e.IsArchived) })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        var type = await With(f => (f.Shorts, f.Longs) = (true, true)).Apply(query, titleSearch)
+            .GroupBy(_ => 1)
+            .Select(g => new
+            {
+                Shorts = g.Count(e => e.EnclosureUrl == null && e.DurationSeconds != null && e.DurationSeconds <= ShortMaxSeconds),
+                Longs = g.Count(e => !(e.EnclosureUrl == null && e.DurationSeconds != null && e.DurationSeconds <= ShortMaxSeconds)),
+            })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        var source = await With(f => (f.Downloaded, f.NotDownloaded, f.Streamed, f.Upcoming) = (true, true, true, true)).Apply(query, titleSearch)
+            .GroupBy(_ => 1)
+            .Select(g => new
+            {
+                Downloaded = g.Count(e => e.YouTubeVideoId == null && e.IsDownloaded),
+                NotDownloaded = g.Count(e => e.YouTubeVideoId == null && !e.IsDownloaded),
+                Streamed = g.Count(e => e.YouTubeVideoId != null && e.ScheduledStartUtc == null),
+                Upcoming = g.Count(e => e.YouTubeVideoId != null && e.ScheduledStartUtc != null),
+            })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        var inProgress = await With(f => f.InProgressOnly = true).Apply(query, titleSearch).CountAsync(cancellationToken);
+
+        return new EpisodeFilterCounts(
+            status?.Unplayed ?? 0, status?.Archived ?? 0,
+            type?.Shorts ?? 0, type?.Longs ?? 0,
+            source?.Downloaded ?? 0, source?.NotDownloaded ?? 0, source?.Streamed ?? 0, source?.Upcoming ?? 0,
+            inProgress);
+    }
+
+    // A copy with one group adjusted, so counting never mutates the shared config instance.
+    private EpisodeFilters With(Action<EpisodeFilters> adjust)
+    {
+        var copy = (EpisodeFilters)MemberwiseClone();
+        adjust(copy);
+        return copy;
+    }
+
     /// <summary>Final source check once the caller knows whether an RSS file is actually on disk.</summary>
     public bool MatchesSource(bool isYouTube, bool isUpcoming, bool isOnDisk) =>
         isYouTube
             ? (isUpcoming ? Upcoming : Streamed)
             : (isOnDisk ? Downloaded : NotDownloaded);
 }
+
+/// <summary>Per-box episode counts shown in the Filters menu (see <see cref="EpisodeFilters.CountAsync"/>).</summary>
+internal sealed record EpisodeFilterCounts(
+    int Unplayed, int Archived,
+    int Shorts, int Longs,
+    int Downloaded, int NotDownloaded, int Streamed, int Upcoming,
+    int InProgress);

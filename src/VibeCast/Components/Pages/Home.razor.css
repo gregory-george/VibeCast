@@ -240,6 +240,17 @@
     font-weight: 700;
 }
 
+.filter-label {
+    flex-grow: 1;
+}
+
+.filter-count {
+    margin-left: 1rem;
+    font-size: 0.78rem;
+    color: var(--vc-text-faint);
+    font-variant-numeric: tabular-nums;
+}
+
 .filter-reset {
     padding-left: calc(0.5rem + 1.2rem);
     color: var(--vc-text-muted);

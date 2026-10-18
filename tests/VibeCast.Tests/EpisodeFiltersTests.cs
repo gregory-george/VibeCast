@@ -71,6 +71,24 @@ public class EpisodeFiltersTests
     }
 
     [Fact]
+    public async Task Counts_AreFacetedByTheOtherGroups()
+    {
+        using var factory = await SeedAsync();
+        await using var db = await factory.CreateDbContextAsync();
+
+        // Defaults: each group's counts cover the active list (6), plus 1 archived.
+        Assert.Equal(
+            new EpisodeFilterCounts(6, 1, 1, 5, 1, 2, 2, 1, 1),
+            await new EpisodeFilters().CountAsync(db.Episodes, null, CancellationToken.None));
+
+        // Hiding YouTube via Source narrows the Status and Type counts, but not Source's own.
+        var podcastsOnly = new EpisodeFilters { Streamed = false, Upcoming = false };
+        Assert.Equal(
+            new EpisodeFilterCounts(3, 1, 0, 3, 1, 2, 2, 1, 1),
+            await podcastsOnly.CountAsync(db.Episodes, null, CancellationToken.None));
+    }
+
+    [Fact]
     public void MatchesSource_UsesDiskStateForRss()
     {
         var onlyNotDownloaded = new EpisodeFilters { Downloaded = false };
