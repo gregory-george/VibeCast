@@ -1,4 +1,5 @@
 using System.Text.Json;
+using VibeCast.Episodes;
 
 namespace VibeCast.AppHost;
 
@@ -110,6 +111,14 @@ internal sealed class AppConfig
     /// when false. Default true (newest-first).
     /// </summary>
     public bool EpisodeSortDescending { get; set; } = true;
+
+    /// <summary>
+    /// Episode-list filters on the library page (the "Filters" drop-down; see
+    /// <see cref="VibeCast.Episodes.EpisodeFilters"/>), restored on the next launch.
+    /// Defaults show the active (unarchived) list. An explicit <c>null</c> in the file
+    /// falls back to defaults.
+    /// </summary>
+    public EpisodeFilters EpisodeFilters { get; set => field = value ?? new(); } = new();
 
     /// <summary>
     /// Which column the feed table on the Feeds page is sorted by (see

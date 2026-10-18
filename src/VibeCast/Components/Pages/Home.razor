@@ -64,15 +64,46 @@
 
     <section class="episode-list">
         <div class="episode-list-header">
-            <h2>@(showArchived ? "Archived" : "Episodes")</h2>
-            <label>
-                <input type="checkbox" class="toggle" checked="@showArchived" @onchange="ToggleShowArchivedAsync" />
-                Show archived
-            </label>
-            <button @onclick="ToggleSortOrderAsync" title="Toggle sort order">
-                @(Config.EpisodeSortDescending ? "Newest first ↓" : "Oldest first ↑")
-            </button>
+            <h2>Episodes</h2>
+            <div class="episode-list-controls">
+                <div class="filter-menu" @onkeydown="OnFilterMenuKeyDown">
+                    <button class="@(Filters.ChangedCount() > 0 ? "filter-button filtered" : "filter-button")"
+                            aria-haspopup="menu" aria-expanded="@(filterMenuOpen ? "true" : "false")"
+                            title="Choose which episodes the list shows"
+                            @onclick="() => filterMenuOpen = !filterMenuOpen">
+                        @FilterButtonText
+                    </button>
+                    @if (filterMenuOpen)
+                    {
+                        <div class="filter-backdrop" @onclick="() => filterMenuOpen = false"></div>
+                        <div class="filter-dropdown" role="menu">
+                            <div class="filter-group-label">Status</div>
+                            @FilterItem("Unplayed", "Episodes not yet played/archived", Filters.Unplayed, v => Filters.Unplayed = v)
+                            @FilterItem("Archived", "Played episodes moved to the archive", Filters.Archived, v => Filters.Archived = v)
+                            <div class="filter-group-label">Type</div>
+                            @FilterItem("Shorts", "YouTube Shorts (5 minutes or less)", Filters.Shorts, v => Filters.Shorts = v)
+                            @FilterItem("Longs", "Everything that isn't a Short, podcasts included", Filters.Longs, v => Filters.Longs = v)
+                            <div class="filter-group-label">Source</div>
+                            @FilterItem("Downloaded", "Podcast episodes on disk", Filters.Downloaded, v => Filters.Downloaded = v)
+                            @FilterItem("Not downloaded", "Podcast episodes not on disk (queued, failed, or past the auto-download cutoff)", Filters.NotDownloaded, v => Filters.NotDownloaded = v)
+                            @FilterItem("Streamed", "YouTube videos that have aired", Filters.Streamed, v => Filters.Streamed = v)
+                            @FilterItem("Upcoming", "YouTube premieres that haven't aired yet", Filters.Upcoming, v => Filters.Upcoming = v)
+                            <div class="filter-group-label">Progress</div>
+                            @FilterItem("In progress only", "Only episodes with a saved resume position", Filters.InProgressOnly, v => Filters.InProgressOnly = v)
+                            <hr />
+                            <button class="filter-reset" role="menuitem" disabled="@(Filters.ChangedCount() == 0)" @onclick="ResetFiltersAsync">
+                                Reset to defaults
+                            </button>
+                        </div>
+                    }
+                </div>
+                <button @onclick="ToggleSortOrderAsync" title="Toggle sort order">
+                    @(Config.EpisodeSortDescending ? "Newest first ↓" : "Oldest first ↑")
+                </button>
+            </div>
         </div>
+        <input type="search" class="episode-search" placeholder="Search titles" aria-label="Search episode titles"
+               @bind="searchText" @bind:event="oninput" @bind:after="OnSearchChangedAsync" />
 
         @if (episodes is null)
         {
@@ -80,7 +111,7 @@
         }
         else if (episodes.Count == 0)
         {
-            <p>@(showArchived ? "No archived episodes." : "No episodes yet.")</p>
+            <p>@(IsListNarrowed ? "No episodes match the current filters." : "No episodes yet.")</p>
         }
         else
         {
@@ -109,6 +140,10 @@
                             @if (episode.ResumeSeconds > 0)
                             {
                                 <span class="position-badge" title="Resumes from @FormatDuration(episode.ResumeSeconds)">@FormatDuration(episode.ResumeSeconds)</span>
+                            }
+                            @if (episode.IsArchived)
+                            {
+                                <span class="archived-badge" title="Played and archived">Archived</span>
                             }
                         </div>
                         <div class="episode-meta">
@@ -203,16 +238,29 @@
     private EpisodeDetail? detail;
     private int? selectedFeedId;
     private int? selectedEpisodeId;
-    private bool showArchived;
+    private bool filterMenuOpen;
+    private string searchText = string.Empty;
+    private int loadVersion;
     private bool confirmingMarkAllPlayed;
     private bool isMarkingAllPlayed;
     private readonly CancellationTokenSource cts = new();
 
+    private EpisodeFilters Filters => Config.EpisodeFilters;
+
+    // The count flags a list that's hiding something, so it isn't mistaken for empty.
+    private string FilterButtonText =>
+        Filters.ChangedCount() is > 0 and var changed ? $"Filters ({changed}) ▾" : "Filters ▾";
+
+    // True when filters or the search hide part of the feed's active list.
+    private bool IsListNarrowed => Filters.ChangedCount() > 0 || !string.IsNullOrWhiteSpace(searchText);
+
     // Bulk mark-as-played is a per-feed action, so it needs a feed selected (not "All
-    // feeds"), and it only makes sense on the active list -- archived items are played
-    // already. Short lists aren't worth the risk of a mis-click.
+    // feeds"). It acts on the whole feed, so it's only offered when the list shows exactly
+    // that feed's active episodes, with no filter or search hiding any and no archived
+    // rows mixed in, so the confirmation count is true. Short lists aren't worth the
+    // risk of a mis-click.
     private bool CanMarkFeedAsPlayed =>
-        !showArchived && selectedFeedId is not null && episodes is { Count: > 5 };
+        !IsListNarrowed && selectedFeedId is not null && episodes is { Count: > 5 };
 
     protected override async Task OnInitializedAsync()
     {
@@ -252,8 +300,13 @@
 
     private async Task LoadEpisodesAsync()
     {
+        // Search-as-you-type can start a load before the previous one finishes; only the
+        // newest load may publish its rows.
+        var version = ++loadVersion;
+        var filters = Config.EpisodeFilters;
+
         await using var db = await DbContextFactory.CreateDbContextAsync(cts.Token);
-        var query = db.Episodes.Where(e => e.IsArchived == showArchived);
+        var query = filters.Apply(db.Episodes, searchText);
 
         if (selectedFeedId is { } feedId)
         {
@@ -273,9 +326,10 @@
                 e.PublishedAtUtc,
                 e.DurationSeconds,
                 e.ScheduledStartUtc,
-                IsShort = e.EnclosureUrl == null && e.DurationSeconds != null && e.DurationSeconds <= 300,
-                IsStreaming = e.YouTubeVideoId != null && e.ScheduledStartUtc == null,
+                IsShort = e.EnclosureUrl == null && e.DurationSeconds != null && e.DurationSeconds <= EpisodeFilters.ShortMaxSeconds,
+                IsYouTube = e.YouTubeVideoId != null,
                 e.IsDownloaded,
+                e.IsArchived,
                 FeedSlug = e.Feed.Slug,
                 e.DownloadedFileName,
                 // Resume position only means something on an unplayed episode.
@@ -284,15 +338,27 @@
             .Take(200)
             .ToListAsync(cts.Token);
 
-        episodes = rows
-            .Select(r =>
+        var items = new List<EpisodeListItem>(rows.Count);
+        foreach (var r in rows)
+        {
+            // The flag can outlive the file (mark-as-played defers a locked delete), so
+            // the badge -- and the Downloaded/Not downloaded filter -- follow what is
+            // actually on disk.
+            var fileSize = GetFileSize(r.FeedSlug, r.DownloadedFileName);
+            var isOnDisk = r.IsDownloaded && fileSize is not null;
+            if (!filters.MatchesSource(r.IsYouTube, r.ScheduledStartUtc is not null, isOnDisk))
             {
-                // The flag can outlive the file (mark-as-played defers a locked delete), so
-                // the badge follows what is actually on disk.
-                var fileSize = GetFileSize(r.FeedSlug, r.DownloadedFileName);
-                return new EpisodeListItem(r.Id, r.Title, r.FeedTitle, r.PublishedAtUtc, r.DurationSeconds, r.ScheduledStartUtc, r.IsShort, r.IsStreaming, r.IsDownloaded && fileSize is not null, fileSize, r.ResumeSeconds);
-            })
-            .ToList();
+                continue;
+            }
+
+            var isStreaming = r.IsYouTube && r.ScheduledStartUtc is null;
+            items.Add(new EpisodeListItem(r.Id, r.Title, r.FeedTitle, r.PublishedAtUtc, r.DurationSeconds, r.ScheduledStartUtc, r.IsShort, isStreaming, isOnDisk, r.IsArchived, fileSize, r.ResumeSeconds));
+        }
+
+        if (version == loadVersion)
+        {
+            episodes = items;
+        }
     }
 
     private async Task SelectFeedAsync(int? feedId)
@@ -323,13 +389,53 @@
         await LoadEpisodesAsync();
     }
 
-    private async Task ToggleShowArchivedAsync(ChangeEventArgs e)
+    // One checkable row of the Filters drop-down. Clicking toggles it and leaves the menu
+    // open so several filters can be changed in one go.
+    private RenderFragment FilterItem(string label, string title, bool isChecked, Action<bool> set) =>
+        @<button class="filter-item" role="menuitemcheckbox" aria-checked="@(isChecked ? "true" : "false")" title="@title"
+                 @onclick="() => SetFilterAsync(set, !isChecked)">
+            <span class="filter-check" aria-hidden="true">@(isChecked ? "✓" : null)</span>
+            @label
+        </button>;
+
+    private Task SetFilterAsync(Action<bool> set, bool value)
     {
-        showArchived = e.Value is true;
-        selectedEpisodeId = null;
-        detail = null;
+        set(value);
+        return OnFiltersChangedAsync(save: true);
+    }
+
+    private Task ResetFiltersAsync()
+    {
+        Filters.Reset();
+        return OnFiltersChangedAsync(save: true);
+    }
+
+    private Task OnSearchChangedAsync() => OnFiltersChangedAsync(save: false);
+
+    private async Task OnFiltersChangedAsync(bool save)
+    {
+        if (save)
+        {
+            Config.Save();
+        }
+
         confirmingMarkAllPlayed = false;
         await LoadEpisodesAsync();
+
+        // Keep the detail pane only while its episode is still in the list.
+        if (selectedEpisodeId is { } id && episodes?.Any(e => e.Id == id) != true)
+        {
+            selectedEpisodeId = null;
+            detail = null;
+        }
+    }
+
+    private void OnFilterMenuKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+        {
+            filterMenuOpen = false;
+        }
     }
 
     private async Task SelectEpisodeAsync(int episodeId)
@@ -351,7 +457,7 @@
                 e.IsPlayed,
                 e.IsArchived,
                 IsRss = e.EnclosureUrl != null,
-                IsShort = e.EnclosureUrl == null && e.DurationSeconds != null && e.DurationSeconds <= 300,
+                IsShort = e.EnclosureUrl == null && e.DurationSeconds != null && e.DurationSeconds <= EpisodeFilters.ShortMaxSeconds,
                 e.IsDownloaded,
                 FeedSlug = e.Feed.Slug,
                 e.DownloadedFileName,
@@ -535,7 +641,7 @@
 
     private sealed record FeedSummary(int Id, string Title, int ActiveCount, long UnplayedSeconds, bool HasArtwork);
 
-    private sealed record EpisodeListItem(int Id, string Title, string FeedTitle, DateTime PublishedAtUtc, int? DurationSeconds, DateTime? ScheduledStartUtc, bool IsShort, bool IsStreaming, bool IsDownloaded, long? FileSizeBytes, int ResumeSeconds);
+    private sealed record EpisodeListItem(int Id, string Title, string FeedTitle, DateTime PublishedAtUtc, int? DurationSeconds, DateTime? ScheduledStartUtc, bool IsShort, bool IsStreaming, bool IsDownloaded, bool IsArchived, long? FileSizeBytes, int ResumeSeconds);
 
     private sealed record EpisodeDetail(int Id, string Title, string FeedTitle, DateTime PublishedAtUtc, int? DurationSeconds, DateTime? ScheduledStartUtc, string? DescriptionHtml, bool IsPlayed, bool IsArchived, bool IsRss, bool IsShort, bool IsDownloaded, long? FileSizeBytes);
 }

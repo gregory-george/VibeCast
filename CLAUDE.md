@@ -247,8 +247,9 @@ These are the things that silently break the app if violated.
   and the deletion is **deferred** — the retention sweep retries it on the next refresh/shutdown.
   For YouTube it's a read-flag + archive only (nothing on disk). Retention/deletion does **not**
   apply to YouTube.
-- **Archive:** kept in the DB forever, hidden from the active/unplayed list. Show/hide toggle,
-  **default off**, applies to RSS and YouTube.
+- **Archive:** kept in the DB forever, hidden from the active/unplayed list. Shown via the
+  library's **Archived** filter (see Episode filters below), **default off**, applies to RSS and
+  YouTube.
 - **Unarchive** sets `played = false`. For RSS it **re-downloads the enclosure only if the file
   is actually gone** (avoids a redundant re-fetch of one still on disk); surface a clear error
   if the URL is dead — no half-played ghost record. YouTube is a view-only move.
@@ -293,6 +294,14 @@ These are the things that silently break the app if violated.
   `EpisodeSortDescending` (newest-first, default on), and `VideoPlayerHeightPx` (sticky height
   of the small video player, set by dragging its resize handle — that JS resize handle is one of
   the concurrent `config.json` writers the `AppConfig` lock guards).
+- **Episode filters** (`Episodes/EpisodeFilters`, persisted as `AppConfig.EpisodeFilters`, shown
+  as the library's "Filters" drop-down). Each checked box *includes* its slice; boxes OR within a
+  group, groups AND: **Status** Unplayed (= not archived) / Archived · **Type** Shorts (YouTube,
+  no enclosure, ≤ 5 min) / Longs (everything else, podcasts included) · **Source** Downloaded /
+  Not downloaded (RSS, by **file on disk**, not just the flag) / Streamed / Upcoming (YouTube, by
+  `ScheduledStartUtc`). "In progress only" is the one restricting filter. Defaults = the plain
+  active list. A title search box beside it is per-session, not persisted. "Mark all as played"
+  acts on the whole feed, so it's only offered when no filter or search narrows the list.
 - **Reconnect:** `ReconnectModal` is a custom-styled replacement for Blazor Server's default
   reconnect/resume overlay (rejoin / paused-session / retry states).
 - **OPML:** export is a loopback endpoint (`GET /opml/export`); import runs in-browser
