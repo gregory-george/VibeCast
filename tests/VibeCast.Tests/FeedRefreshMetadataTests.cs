@@ -136,7 +136,26 @@ public class FeedRefreshMetadataTests
         return feed.Id;
     }
 
-    private static FeedRefreshService BuildService(TestDbContextFactory factory, Func<string> feedBody)
+    [Fact]
+    public async Task RefreshFeedAsync_NotifiesOnlyWhenEpisodesAdded()
+    {
+        using var factory = new TestDbContextFactory();
+        var feedId = await SeedRssFeedAsync(factory);
+        var notifier = new FeedRefreshNotifier();
+        var notified = new List<int>();
+        notifier.EpisodesAdded += notified.Add;
+        var service = BuildService(factory, () => Rss("v1"), notifier);
+
+        await service.RefreshFeedAsync(feedId, CancellationToken.None);
+        Assert.Equal([feedId], notified);
+
+        // Same items again: metadata may update, but nothing new -- no reload signal.
+        await service.RefreshFeedAsync(feedId, CancellationToken.None);
+        Assert.Equal([feedId], notified);
+    }
+
+    private static FeedRefreshService BuildService(
+        TestDbContextFactory factory, Func<string> feedBody, FeedRefreshNotifier? notifier = null)
     {
         var tracker = new DownloadProgressTracker();
         var config = new AppConfig();
@@ -152,6 +171,7 @@ public class FeedRefreshMetadataTests
             new FeedArtworkService(inertClient, factory, NullLogger<FeedArtworkService>.Instance),
             new YouTubeChannelResolver(inertClient),
             new YouTubeDurationService(inertClient, factory, NullLogger<YouTubeDurationService>.Instance),
+            notifier ?? new FeedRefreshNotifier(),
             NullLogger<FeedRefreshService>.Instance,
             retryDelayProvider: _ => TimeSpan.Zero);
     }

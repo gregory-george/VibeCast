@@ -204,6 +204,10 @@ These are the things that silently break the app if violated.
   clamped **30–180**). The interval is re-read from `AppConfig` before each wait, so a Settings
   change applies on the next cycle without a restart; the first timed refresh fires one full
   interval after startup (launch-time refresh stays `RefreshOnOpen`'s job).
+- **Open library pages follow background refreshes:** a refresh that stores new episodes raises
+  the singleton `Feeds/FeedRefreshNotifier` (`FeedRefreshService` itself is scoped), and `Home`
+  reloads its sidebar counts and episode list — debounced ~1 s so a "Refresh all" burst is one
+  reload — keeping the current selection, filters and search.
 - **Paused feeds** (`Feed.IsPaused`, toggled from the Feeds page) are excluded from
   `RefreshAllAsync` entirely — periodic timer, refresh-on-open and "Refresh all" all skip
   them — and never auto-download (the `AutoDownloadGate` and the startup sweep both check

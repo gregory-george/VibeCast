@@ -154,6 +154,7 @@ public class FeedRefreshRetryTests
             new FeedArtworkService(inertClient, factory, NullLogger<FeedArtworkService>.Instance),
             new YouTubeChannelResolver(inertClient),
             new YouTubeDurationService(inertClient, factory, NullLogger<YouTubeDurationService>.Instance),
+            new FeedRefreshNotifier(),
             NullLogger<FeedRefreshService>.Instance,
             retryDelayProvider: _ => TimeSpan.Zero); // no real backoff waits in tests
     }

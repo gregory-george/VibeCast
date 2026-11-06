@@ -24,6 +24,7 @@ internal sealed class FeedRefreshService(
     FeedArtworkService artworkService,
     YouTubeChannelResolver youTubeChannelResolver,
     YouTubeDurationService youTubeDurationService,
+    FeedRefreshNotifier notifier,
     ILogger<FeedRefreshService> logger,
     // Backoff between fetch retries. Injectable so tests don't wait real seconds; production
     // (and DI, which can't supply it) falls back to the exponential default.
@@ -172,6 +173,13 @@ internal sealed class FeedRefreshService(
             // a duration -- notably premieres that reported length 0 before airing, which
             // pick up a real duration and shed their "upcoming" scheduled-start once live.
             await youTubeDurationService.BackfillFeedAsync(feed.Id, ct);
+        }
+
+        if (newEpisodes.Count > 0)
+        {
+            // Lets open library pages pick up the new rows without a navigation. Raised
+            // after the duration backfill so a YouTube row lands with its length.
+            notifier.NotifyEpisodesAdded(feed.Id);
         }
 
         var feedTitle = feed.Title ?? feed.OriginalUrl;

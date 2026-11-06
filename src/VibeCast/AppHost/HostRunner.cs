@@ -236,6 +236,7 @@ internal static class HostRunner
         builder.Services.AddScoped<Opml.OpmlService>();
         builder.Services.AddSingleton<ShowNotesSanitizer>();
 
+        builder.Services.AddSingleton<FeedRefreshNotifier>();
         builder.Services.AddSingleton<DownloadProgressTracker>();
         builder.Services.AddSingleton<DownloadQueue>();
         builder.Services.AddSingleton<DownloadCancellationRegistry>();

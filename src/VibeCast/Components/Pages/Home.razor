@@ -6,12 +6,14 @@
 @inject DownloadQueue DownloadQueue
 @inject DownloadProgressTracker ProgressTracker
 @inject PlaybackService PlaybackService
+@inject FeedRefreshNotifier RefreshNotifier
 @inject AppConfig Config
 @using Microsoft.EntityFrameworkCore
 @using VibeCast.AppHost
 @using VibeCast.Data
 @using VibeCast.Downloads
 @using VibeCast.Episodes
+@using VibeCast.Feeds
 @implements IDisposable
 
 <PageTitle>VibeCast</PageTitle>
@@ -249,6 +251,11 @@
     private bool confirmingMarkAllPlayed;
     private bool isMarkingAllPlayed;
     private readonly CancellationTokenSource cts = new();
+    private CancellationTokenSource? refreshReloadDebounce;
+
+    // A "refresh all" reports each feed as it lands (up to 4 at a time); coalesce a burst
+    // into one reload rather than re-querying per feed.
+    private static readonly TimeSpan RefreshReloadDelay = TimeSpan.FromSeconds(1);
 
     private EpisodeFilters Filters => Config.EpisodeFilters;
 
@@ -272,6 +279,7 @@
         ProgressTracker.Changed += OnProgressChanged;
         PlaybackService.PositionSaved += OnPositionSaved;
         PlaybackService.Watched += OnWatched;
+        RefreshNotifier.EpisodesAdded += OnEpisodesAdded;
         await LoadFeedsAsync();
         await LoadEpisodesAsync();
     }
@@ -299,6 +307,28 @@
         {
             episodes![index] = episodes[index] with { ResumeSeconds = 0, IsWatched = true };
             StateHasChanged();
+        }
+    });
+
+    // A background refresh (periodic timer, refresh-on-open, the Feeds page) stored new
+    // episodes: reload the sidebar counts and the episode list so they show up without a
+    // navigation. Selection, filters and search are kept -- the loads read them as-is.
+    private void OnEpisodesAdded(int feedId) => InvokeAsync(async () =>
+    {
+        try
+        {
+            refreshReloadDebounce?.Cancel();
+            refreshReloadDebounce?.Dispose();
+            var debounce = refreshReloadDebounce = CancellationTokenSource.CreateLinkedTokenSource(cts.Token);
+            await Task.Delay(RefreshReloadDelay, debounce.Token);
+
+            await LoadFeedsAsync();
+            await LoadEpisodesAsync();
+            StateHasChanged();
+        }
+        catch (Exception ex) when (ex is OperationCanceledException or ObjectDisposedException)
+        {
+            // Superseded by a newer refresh, or the page went away.
         }
     });
 
@@ -677,7 +707,9 @@
         ProgressTracker.Changed -= OnProgressChanged;
         PlaybackService.PositionSaved -= OnPositionSaved;
         PlaybackService.Watched -= OnWatched;
+        RefreshNotifier.EpisodesAdded -= OnEpisodesAdded;
         cts.Cancel();
+        refreshReloadDebounce?.Dispose();
         cts.Dispose();
     }
 
