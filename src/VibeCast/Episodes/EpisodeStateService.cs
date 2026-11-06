@@ -157,4 +157,25 @@ internal sealed class EpisodeStateService(
         await db.SaveChangesAsync(ct);
         return true;
     }
+
+    /// <summary>
+    /// Records that playback reached the end: flags the episode watched and resets its
+    /// resume position so the next play starts from the beginning. Applies to played
+    /// rows too (a YouTube archive item can still be replayed); resetting to 0 can't
+    /// resurrect a stale position. Returns whether the episode exists.
+    /// </summary>
+    public async Task<bool> MarkWatchedAsync(int episodeId, CancellationToken ct)
+    {
+        await using var db = await dbContextFactory.CreateDbContextAsync(ct);
+        var episode = await db.Episodes.FindAsync([episodeId], ct);
+        if (episode is null)
+        {
+            return false;
+        }
+
+        episode.IsWatched = true;
+        episode.PlaybackPositionSeconds = 0;
+        await db.SaveChangesAsync(ct);
+        return true;
+    }
 }

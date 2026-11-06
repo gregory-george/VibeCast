@@ -448,8 +448,12 @@ else if (PlaybackService.PendingPlayError is { } pendingError)
     [JSInvokable]
     public async Task OnEnded(int episodeId)
     {
-        // Finished: the next play starts from the beginning rather than the end.
-        await SaveExplicitPositionAsync(episodeId, 0);
+        // Finished: flag it watched; the next play starts from the beginning rather than the end.
+        if (episodeId > 0)
+        {
+            await PlaybackService.MarkWatchedAsync(episodeId, CancellationToken.None);
+        }
+
         await PlaybackService.HandlePlaybackEndedAsync(CancellationToken.None);
     }
 

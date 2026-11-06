@@ -322,6 +322,7 @@
 .streaming-badge,
 .downloaded-badge,
 .position-badge,
+.watched-badge,
 .archived-badge {
     display: inline-block;
     margin-left: 0.4rem;
@@ -363,6 +364,13 @@
     background: var(--vc-accent);
     color: var(--vc-on-accent);
     font-variant-numeric: tabular-nums;
+}
+
+/* Soft fill (vs Downloaded's outline) so the two green badges stay distinct, and the
+   tinted text stays readable in both themes. */
+.watched-badge {
+    background: color-mix(in srgb, var(--vc-success) 18%, transparent);
+    color: var(--vc-success);
 }
 
 .episode-detail {

@@ -281,6 +281,31 @@ public class EpisodeStateServiceTests
         Assert.Equal(0, episode.PlaybackPositionSeconds);
     }
 
+    [Fact]
+    public async Task MarkWatched_FlagsEpisodeAndResetsPosition()
+    {
+        using var factory = new TestDbContextFactory();
+        var service = BuildService(factory, new DownloadProgressTracker());
+        var episodeId = await SeedYouTubeEpisodeAsync(factory);
+        await service.SavePlaybackPositionAsync(episodeId, 754, CancellationToken.None);
+
+        var marked = await service.MarkWatchedAsync(episodeId, CancellationToken.None);
+
+        Assert.True(marked);
+        var episode = await LoadEpisodeAsync(factory, episodeId);
+        Assert.True(episode.IsWatched);
+        Assert.Equal(0, episode.PlaybackPositionSeconds);
+    }
+
+    [Fact]
+    public async Task MarkWatched_UnknownEpisode_ReturnsFalse()
+    {
+        using var factory = new TestDbContextFactory();
+        var service = BuildService(factory, new DownloadProgressTracker());
+
+        Assert.False(await service.MarkWatchedAsync(12345, CancellationToken.None));
+    }
+
     private static EpisodeStateService BuildService(TestDbContextFactory factory, DownloadProgressTracker tracker) =>
         BuildService(factory, tracker, new DownloadCancellationRegistry(tracker));
 

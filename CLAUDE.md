@@ -179,8 +179,10 @@ These are the things that silently break the app if violated.
 - **Resume position:** `PlaybackPositionSeconds` per episode so the in-app player resumes where
   the user left off (`0` = start from the beginning). Saved on **pause**, on **stop/close and
   switching episodes** (in `NowPlaying.OnPlaybackChanged`, before the render tears the old
-  player down), and by a ~5 s periodic timer while playing. Reaching the **end resets it to 0**;
-  a zero reading otherwise never overwrites a stored position. Saves are keyed to the episode
+  player down), and by a ~5 s periodic timer while playing. Reaching the **end resets it to 0**
+  and sets **`IsWatched`** (the list's "Watched" badge, patched live via
+  `PlaybackService.Watched`) — independent of `IsPlayed`, which only follows on completion when
+  `AutoMarkOnCompletion` is on; a zero reading otherwise never overwrites a stored position. Saves are keyed to the episode
   actually loaded in the player (JS events carry their episode id), never
   `PlaybackService.Current`, which flips before the new player loads. **Only unplayed episodes
   are written** (`SavePlaybackPositionAsync` skips played rows). The episode list shows a

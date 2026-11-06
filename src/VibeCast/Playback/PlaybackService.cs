@@ -132,6 +132,21 @@ internal sealed class PlaybackService : IDisposable
     }
 
     /// <summary>
+    /// Raised after an episode played through to the end was flagged watched (its resume
+    /// position reset to 0), so the episode list can swap the position badge for "Watched".
+    /// </summary>
+    public event Action<int>? Watched;
+
+    /// <summary>Flags the episode the player just finished as watched; see <see cref="Watched"/>.</summary>
+    public async Task MarkWatchedAsync(int episodeId, CancellationToken ct)
+    {
+        if (await episodeStateService.MarkWatchedAsync(episodeId, ct))
+        {
+            Watched?.Invoke(episodeId);
+        }
+    }
+
+    /// <summary>
     /// Called when the in-app player reaches the end of the current episode. Only
     /// acts if the user opted into auto-mark-on-completion (default off) -- on
     /// *open* would delete the RSS file out from under the player, but completion

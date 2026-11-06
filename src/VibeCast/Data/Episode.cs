@@ -62,4 +62,12 @@ internal sealed class Episode
     public string? DownloadedFileName { get; set; }
 
     public int PlaybackPositionSeconds { get; set; }
+
+    /// <summary>
+    /// Set when the in-app player reaches the end of the episode (drives the "Watched"
+    /// badge). Independent of <see cref="IsPlayed"/>: finishing doesn't mark-as-played
+    /// unless AutoMarkOnCompletion is on, and the resume position resets to 0 so the next
+    /// play starts from the beginning.
+    /// </summary>
+    public bool IsWatched { get; set; }
 }

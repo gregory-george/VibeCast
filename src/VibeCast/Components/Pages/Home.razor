@@ -141,6 +141,10 @@
                             {
                                 <span class="position-badge" title="Resumes from @FormatDuration(episode.ResumeSeconds)">@FormatDuration(episode.ResumeSeconds)</span>
                             }
+                            @if (episode.IsWatched)
+                            {
+                                <span class="watched-badge" title="Played through to the end">Watched</span>
+                            }
                             @if (episode.IsArchived)
                             {
                                 <span class="archived-badge" title="Played and archived">Archived</span>
@@ -267,6 +271,7 @@
     {
         ProgressTracker.Changed += OnProgressChanged;
         PlaybackService.PositionSaved += OnPositionSaved;
+        PlaybackService.Watched += OnWatched;
         await LoadFeedsAsync();
         await LoadEpisodesAsync();
     }
@@ -281,6 +286,18 @@
         if (index >= 0 && episodes![index].ResumeSeconds != positionSeconds)
         {
             episodes[index] = episodes[index] with { ResumeSeconds = positionSeconds };
+            StateHasChanged();
+        }
+    });
+
+    // Playback just reached the end: the resume position was reset, so the row's
+    // position badge gives way to "Watched".
+    private void OnWatched(int episodeId) => InvokeAsync(() =>
+    {
+        var index = episodes?.FindIndex(e => e.Id == episodeId) ?? -1;
+        if (index >= 0)
+        {
+            episodes![index] = episodes[index] with { ResumeSeconds = 0, IsWatched = true };
             StateHasChanged();
         }
     });
@@ -334,6 +351,7 @@
                 e.DownloadedFileName,
                 // Resume position only means something on an unplayed episode.
                 ResumeSeconds = e.IsPlayed ? 0 : e.PlaybackPositionSeconds,
+                e.IsWatched,
             })
             .Take(200)
             .ToListAsync(cts.Token);
@@ -352,7 +370,7 @@
             }
 
             var isStreaming = r.IsYouTube && r.ScheduledStartUtc is null;
-            items.Add(new EpisodeListItem(r.Id, r.Title, r.FeedTitle, r.PublishedAtUtc, r.DurationSeconds, r.ScheduledStartUtc, r.IsShort, isStreaming, isOnDisk, r.IsArchived, fileSize, r.ResumeSeconds));
+            items.Add(new EpisodeListItem(r.Id, r.Title, r.FeedTitle, r.PublishedAtUtc, r.DurationSeconds, r.ScheduledStartUtc, r.IsShort, isStreaming, isOnDisk, r.IsArchived, fileSize, r.ResumeSeconds, r.IsWatched));
         }
 
         if (version == loadVersion)
@@ -658,13 +676,14 @@
     {
         ProgressTracker.Changed -= OnProgressChanged;
         PlaybackService.PositionSaved -= OnPositionSaved;
+        PlaybackService.Watched -= OnWatched;
         cts.Cancel();
         cts.Dispose();
     }
 
     private sealed record FeedSummary(int Id, string Title, int ActiveCount, long UnplayedSeconds, bool HasArtwork);
 
-    private sealed record EpisodeListItem(int Id, string Title, string FeedTitle, DateTime PublishedAtUtc, int? DurationSeconds, DateTime? ScheduledStartUtc, bool IsShort, bool IsStreaming, bool IsDownloaded, bool IsArchived, long? FileSizeBytes, int ResumeSeconds);
+    private sealed record EpisodeListItem(int Id, string Title, string FeedTitle, DateTime PublishedAtUtc, int? DurationSeconds, DateTime? ScheduledStartUtc, bool IsShort, bool IsStreaming, bool IsDownloaded, bool IsArchived, long? FileSizeBytes, int ResumeSeconds, bool IsWatched);
 
     private sealed record EpisodeDetail(int Id, string Title, string FeedTitle, DateTime PublishedAtUtc, int? DurationSeconds, DateTime? ScheduledStartUtc, string? DescriptionHtml, bool IsPlayed, bool IsArchived, bool IsRss, bool IsShort, bool IsDownloaded, long? FileSizeBytes);
 }
