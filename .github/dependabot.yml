@@ -1,0 +1,25 @@
+version: 2
+updates:
+  - package-ecosystem: nuget
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      # EF Core packages must move in lockstep (app + tests + dotnet-ef tool).
+      efcore:
+        patterns:
+          - "Microsoft.EntityFrameworkCore*"
+          - "dotnet-ef"
+      sqlite:
+        patterns:
+          - "SQLitePCLRaw*"
+      test:
+        patterns:
+          - "xunit*"
+          - "Microsoft.NET.Test.Sdk"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
