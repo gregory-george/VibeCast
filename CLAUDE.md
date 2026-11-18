@@ -54,8 +54,12 @@ kept for history, not an active spec.
 - Console window is suppressed at runtime via `FreeConsole()` P/Invoke, **not**
   `OutputType=WinExe` — setting `WinExe` breaks the SDK's static-web-asset / Razor JS pipeline
   (`blazor.web.js` 404s, no interactivity). Don't "fix" this back to `WinExe`.
-- Tests: `dotnet test` (`tests/VibeCast.Tests`, **xUnit v3**, same `net10.0-windows` TFM,
-  same pinned `RuntimeIdentifier=win-x64` so a RID-less run can still load the app assembly).
+- Tests: `dotnet test` (`tests/VibeCast.Tests`, **xUnit v4** (`xunit.v3` package line),
+  same `net10.0-windows` TFM, same pinned `RuntimeIdentifier=win-x64` so a RID-less run can
+  still load the app assembly). The repo-root `global.json` opts `dotnet test` into
+  **Microsoft.Testing.Platform** (xUnit v4 no longer runs under VSTest on the .NET 10 SDK) —
+  so use MTP-style args (`--solution`, `--report-xunit-trx`, `--filter-*`), not VSTest's
+  `--logger`/`--filter`. CI (`.github/workflows/ci.yml`) builds and tests on `windows-latest`.
   The app grants it `InternalsVisibleTo` — keep types `internal sealed`, never widen
   visibility for testability. Downloader integration tests run EF against SQLite in-memory;
   `FeedRefreshService` takes an injectable retry-delay `Func` so retry tests don't sleep real
