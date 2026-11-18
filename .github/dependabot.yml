@@ -5,6 +5,12 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    ignore:
+      # EF Core majors (incl. the dotnet-ef tool) track the .NET major; upgrade them by hand.
+      - dependency-name: "Microsoft.EntityFrameworkCore*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "dotnet-ef"
+        update-types: ["version-update:semver-major"]
     groups:
       # EF Core packages must move in lockstep (app + tests + dotnet-ef tool).
       efcore:
