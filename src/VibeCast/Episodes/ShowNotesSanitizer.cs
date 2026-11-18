@@ -11,10 +11,32 @@ namespace VibeCast.Episodes;
 /// </summary>
 internal sealed class ShowNotesSanitizer
 {
+    // HtmlSanitizer's defaults allow working forms (<form action="https://..."> plus
+    // inputs and buttons). Show notes never need them, and a hostile feed could use one
+    // to collect whatever the user types, so strip the form controls (with their
+    // content) and the attributes that point a form somewhere.
+    private static readonly string[] FormTags =
+    [
+        "form", "input", "button", "select", "option", "optgroup", "textarea", "label",
+        "fieldset", "legend", "datalist", "keygen", "output",
+    ];
+
+    private static readonly string[] FormAttributes = ["action", "method"];
+
     private readonly HtmlSanitizer sanitizer = new();
 
     public ShowNotesSanitizer()
     {
+        foreach (var tag in FormTags)
+        {
+            sanitizer.AllowedTags.Remove(tag);
+        }
+
+        foreach (var attribute in FormAttributes)
+        {
+            sanitizer.AllowedAttributes.Remove(attribute);
+        }
+
         // External show-note links should open in a new tab rather than navigating
         // away from the single-page app in the current one.
         sanitizer.PostProcessNode += (_, e) =>

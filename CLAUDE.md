@@ -147,7 +147,8 @@ These are the things that silently break the app if violated.
 
 **Untrusted input (feeds are hostile)**
 - **Always sanitize show-note HTML before rendering** (`Episodes/ShowNotesSanitizer`, built on
-  `HtmlSanitizer`): strip scripts and unsafe markup, keep links clickable (rewritten to open
+  `HtmlSanitizer`): strip scripts and unsafe markup — including form controls, which
+  HtmlSanitizer's defaults would otherwise allow — keep links clickable (rewritten to open
   in a new tab with `rel="noopener noreferrer"`). Store the **raw** HTML; sanitize at render
   time, never store sanitized.
 - **Derive each download's extension from the enclosure's media type — never from the URL or

